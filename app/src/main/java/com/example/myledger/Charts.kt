@@ -52,7 +52,7 @@ fun BarsCanvas(bars: List<Pair<Double, Color>>, modifier: Modifier) {
         val baseY = size.height * 0.92f
         val scale = (size.height * 0.8f) / maxAbs.toFloat()
         bars.forEachIndexed { i, (v, color) ->
-            val h = abs(v) * scale
+            val h = abs(v).toFloat() * scale
             val top = if (v >= 0) baseY - h else baseY
             val bottom = if (v >= 0) baseY else baseY + h
             drawRect(
@@ -101,14 +101,14 @@ private fun drawTrend(
             val inC = income.getOrElse(i) { 0.0 }
             val bw = (gap * 0.32f).coerceAtLeast(2f)
             // 支出（红）
-            val exH = abs(ex) * scale
+            val exH = abs(ex).toFloat() * scale
             drawRect(
                 Color(0xFFEF4444),
                 topLeft = Offset(gap * i + gap * 0.12f, baseY - exH),
                 size = Size(bw, exH)
             )
             // 收入（绿）
-            val inH = abs(inC) * scale
+            val inH = abs(inC).toFloat() * scale
             drawRect(
                 Color(0xFF22C55E),
                 topLeft = Offset(gap * i + gap * 0.12f + bw + gap * 0.06f, baseY - inH),

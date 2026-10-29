@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Locale
 
 @Composable
 fun StatsScreen() {
@@ -237,7 +240,7 @@ fun StatsScreen() {
         if (bud <= 0) {
             Text("尚未设置预算，去“我的”页面设置一个每月支出上限吧。", color = TextMuted)
         } else {
-            val ratio = (curMonthEx / bud * 100).coerceAtMost(100f)
+            val ratio = (curMonthEx / bud * 100).toFloat().coerceAtMost(100f)
             val over = curMonthEx > bud
             Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -130,7 +131,7 @@ fun ListScreen(onEdit: (Tx) -> Unit) {
                 Text(if (query.isBlank()) "这个月还没有记录，去“记账”记一笔吧～" else "没有匹配的记录", color = TextMuted)
             }
         } else {
-            val grouped = if (sortMode == "group") sorted.groupBy { it.date }.toSortedMap(reverseOrder()) else null
+            val grouped = if (sortMode == "group") sorted.groupBy { it.date }.toSortedMap(reverseOrder<String>()) else null
             if (grouped != null) {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     grouped.forEach { (date, items) ->
