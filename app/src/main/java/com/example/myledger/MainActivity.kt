@@ -112,7 +112,7 @@ object LedgerState {
         save()
     }
 
-    fun setBudget(b: Double) { budget = b; save() }
+    fun setBudgetValue(b: Double) { budget = b; save() }
 
     fun replaceAll(list: List<Tx>, newBudget: Double? = null) {
         transactions.clear()

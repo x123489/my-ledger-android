@@ -95,7 +95,7 @@ fun MineScreen() {
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = {
                         val b = budgetText.toDoubleOrNull()
-                        if (b != null && b >= 0) { LedgerState.setBudget(b); toast(ctx, "预算已设为 ${Util.money(b)}") }
+                        if (b != null && b >= 0) { LedgerState.setBudgetValue(b); toast(ctx, "预算已设为 ${Util.money(b)}") }
                         else toast(ctx, "请输入合法数字")
                     }, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text("保存", color = Color.White) }
                 }
