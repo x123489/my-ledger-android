@@ -34,6 +34,9 @@ jobs:
       - name: Install Android platform & build-tools
         run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Point Gradle to the SDK (local.properties)
+        run: echo "sdk.dir=$HOME/android-sdk" > local.properties
+
       - name: Build debug APK
         uses: gradle/gradle-build-action@v3
         with:

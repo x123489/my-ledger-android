@@ -7,7 +7,7 @@
         android:allowBackup="true"
         android:label="我的记账本"
         android:icon="@drawable/ic_launcher"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.Myledger">
         <activity
             android:name=".MainActivity"
             android:exported="true"

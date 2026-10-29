@@ -307,6 +307,8 @@ fun analyzeRange(period: String, month: String): Triple<List<Tx>, String, Int> {
 
 /** 趋势图用的月份列表 */
 fun trendMonths(period: String, month: String): List<String> {
+    val y = month.split("-").map { it.toInt() }.firstOrNull()
+        ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     return when (period) {
         "month" -> listOf(month)
         "3m" -> (0..2).map { offset -> shiftMonth(month, -offset) }
