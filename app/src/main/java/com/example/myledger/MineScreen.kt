@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,17 +49,20 @@ import java.util.Locale
 
 @Composable
 fun MineScreen() {
+    var sub by remember { mutableStateOf<String?>(null) }
+    when (sub) {
+        "cat" -> CategoryManageScreen(onBack = { sub = null })
+        "budget" -> BudgetManageScreen(onBack = { sub = null })
+        else -> MineMenu(onGo = { sub = it })
+    }
+}
+
+@Composable
+fun MineMenu(onGo: (String) -> Unit) {
     val ctx = LocalContext.current
-    var budgetText by remember { mutableStateOf(if (LedgerState.budget > 0) Util.moneyNoSymbol(LedgerState.budget) else "") }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreDlg by remember { mutableStateOf(false) }
     var showClearDlg by remember { mutableStateOf(false) }
-    var showCatDlg by remember { mutableStateOf(false) }
-    var catDlgType by remember { mutableStateOf("expense") }
-    var catDlgParentId by remember { mutableStateOf<String?>(null) }
-    var catDlgEditId by remember { mutableStateOf<String?>(null) }
-    var catDlgName by remember { mutableStateOf("") }
-    var catDelId by remember { mutableStateOf<String?>(null) }
 
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { pendingRestoreUri = uri; showRestoreDlg = true }
@@ -81,35 +85,14 @@ fun MineScreen() {
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        // 预算
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
-            Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                Text("月度预算", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = budgetText, onValueChange = { budgetText = it }, Modifier.weight(1f),
-                        placeholder = { Text("例如 2000") },
-                        prefix = { Text("¥", color = TextMuted) },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = androidx.compose.material3.TextFieldDefaults.colors(
-                            focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
-                            focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = {
-                        val b = budgetText.toDoubleOrNull()
-                        if (b != null && b >= 0) { LedgerState.setBudgetValue(b); toast(ctx, "预算已设为 ${Util.money(b)}") }
-                        else toast(ctx, "请输入合法数字")
-                    }, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text("保存", color = Color.White) }
-                }
-            }
-        }
+        Text("我的", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextMain)
+        Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(16.dp))
-        // 数据
+        EntryCard("🗂️ 分类管理", "自定义名称 / 增删改 / 支持最多四级多级分类") { onGo("cat") }
+        Spacer(Modifier.height(12.dp))
+        EntryCard("💰 预算管理", "设置每月预算与按分类预算") { onGo("budget") }
+
+        Spacer(Modifier.height(18.dp))
         Text("数据（存在手机真实文件夹：Android/data/com.example.myledger/files/）", fontSize = 13.sp, color = TextMuted)
         Spacer(Modifier.height(8.dp))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
@@ -135,37 +118,9 @@ fun MineScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("分类管理（自定义名称 / 增删改 / 支持多级）", fontSize = 13.sp, color = TextMuted)
-        Spacer(Modifier.height(8.dp))
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
-            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("expense" to "支出分类", "income" to "收入分类", "invest" to "投资分类").forEach { (type, label) ->
-                    Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextMain)
-                    LedgerState.topCats(type).forEach { top ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(top.name, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
-                            TextButton(onClick = { catDlgType = type; catDlgParentId = top.id; catDlgEditId = null; catDlgName = ""; showCatDlg = true }) { Text("加子分类", color = Brand, fontSize = 12.sp) }
-                            TextButton(onClick = { catDlgType = type; catDlgParentId = null; catDlgEditId = top.id; catDlgName = top.name; showCatDlg = true }) { Text("改名", color = TextMuted, fontSize = 12.sp) }
-                            TextButton(onClick = { catDelId = top.id }) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
-                        }
-                        LedgerState.childrenOf(top.id).forEach { child ->
-                            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("· " + child.name, Modifier.weight(1f), fontSize = 13.sp, color = TextMuted)
-                                TextButton(onClick = { catDlgType = type; catDlgParentId = top.id; catDlgEditId = child.id; catDlgName = child.name; showCatDlg = true }) { Text("改名", color = TextMuted, fontSize = 12.sp) }
-                                TextButton(onClick = { catDelId = child.id }) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
-                            }
-                        }
-                    }
-                    BigBtn("＋ 添加${label}") { catDlgType = type; catDlgParentId = null; catDlgEditId = null; catDlgName = ""; showCatDlg = true }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
         Text("说明：本 App 把数据直接存在你手机的文件夹里（不是浏览器），换手机时用“备份/恢复”即可迁移。导出/备份的文件会自动放进手机“下载/Ledger”文件夹，方便你查看和搬运。", fontSize = 12.sp, color = TextMuted)
     }
 
-    // 恢复对话框：覆盖 or 合并
     if (showRestoreDlg && pendingRestoreUri != null) {
         val uri = pendingRestoreUri!!
         AlertDialog(
@@ -187,27 +142,77 @@ fun MineScreen() {
         )
     }
 
-    // 清空确认
     if (showClearDlg) {
         AlertDialog(
             onDismissRequest = { showClearDlg = false },
             title = { Text("清空全部数据？") },
             text = { Text("这会删除所有记账记录，且无法恢复！建议先“备份到下载文件夹”。") },
             confirmButton = {
-                TextButton(onClick = { LedgerState.replaceAll(emptyList(), 0.0); budgetText = ""; showClearDlg = false; toast(ctx, "已清空") }) { Text("删除", color = ExpenseRed) }
+                TextButton(onClick = { LedgerState.replaceAll(emptyList(), 0.0); showClearDlg = false; toast(ctx, "已清空") }) { Text("删除", color = ExpenseRed) }
             },
             dismissButton = { TextButton(onClick = { showClearDlg = false }) { Text("取消") } }
         )
     }
+}
 
-    // 分类新增 / 改名对话框
+@Composable
+fun EntryCard(title: String, desc: String, onClick: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CardWhite)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextMain)
+                Spacer(Modifier.height(4.dp))
+                Text(desc, fontSize = 12.sp, color = TextMuted)
+            }
+            Text("›", fontSize = 22.sp, color = TextMuted)
+        }
+    }
+}
+
+// ---------- 分类管理（递归，最多四级） ----------
+@Composable
+fun CategoryManageScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var showCatDlg by remember { mutableStateOf(false) }
+    var catDlgType by remember { mutableStateOf("expense") }
+    var catDlgParentId by remember { mutableStateOf<String?>(null) }
+    var catDlgEditId by remember { mutableStateOf<String?>(null) }
+    var catDlgName by remember { mutableStateOf("") }
+    var catDelId by remember { mutableStateOf<String?>(null) }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("‹ 返回", Modifier.clickable { onBack() }, color = Brand, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("分类管理", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextMain)
+            Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(14.dp))
+        listOf("expense" to "支出分类", "income" to "收入分类", "invest" to "投资分类").forEach { (type, label) ->
+            Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextMain)
+            Spacer(Modifier.height(6.dp))
+            LedgerState.topCats(type).forEach { top ->
+                CatManageNode(type, top, 1,
+                    onAddChild = { pid -> catDlgType = type; catDlgParentId = pid; catDlgEditId = null; catDlgName = ""; showCatDlg = true },
+                    onRename = { c -> catDlgType = type; catDlgParentId = c.parentId; catDlgEditId = c.id; catDlgName = c.name; showCatDlg = true },
+                    onDelete = { c -> catDelId = c.id })
+            }
+            BigBtn("＋ 添加${label}") { catDlgType = type; catDlgParentId = null; catDlgEditId = null; catDlgName = ""; showCatDlg = true }
+            Spacer(Modifier.height(14.dp))
+        }
+    }
+
     if (showCatDlg) {
         AlertDialog(
             onDismissRequest = { showCatDlg = false },
             title = { Text(if (catDlgEditId != null) "修改分类名称" else "新建分类") },
             text = {
                 Column {
-                    Text(if (catDlgParentId != null) "将作为子分类添加（支持多级）" else "作为一级分类", fontSize = 13.sp, color = TextMuted)
+                    Text(if (catDlgParentId != null) "将作为子分类添加（最多四级）" else "作为一级分类", fontSize = 13.sp, color = TextMuted)
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = catDlgName, onValueChange = { catDlgName = it }, Modifier.fillMaxWidth(),
@@ -234,7 +239,6 @@ fun MineScreen() {
         )
     }
 
-    // 分类删除确认（级联删除子分类）
     catDelId?.let { id ->
         val c = LedgerState.categories.find { it.id == id }
         val hasKids = c?.let { LedgerState.childrenOf(it.id).isNotEmpty() } ?: false
@@ -245,6 +249,108 @@ fun MineScreen() {
             confirmButton = { TextButton(onClick = { LedgerState.deleteCategory(id); catDelId = null }) { Text("删除", color = ExpenseRed) } },
             dismissButton = { TextButton(onClick = { catDelId = null }) { Text("取消") } }
         )
+    }
+}
+
+@Composable
+fun CatManageNode(type: String, cat: Category, depth: Int, onAddChild: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = ((depth - 1) * 16).dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text((if (depth > 1) "· ".repeat(depth - 1) else "") + cat.name, Modifier.weight(1f), fontSize = 13.sp, color = if (depth == 1) TextMain else TextMuted)
+        if (depth < 4) TextButton(onClick = onAddChild) { Text("加子分类", color = Brand, fontSize = 12.sp) }
+        TextButton(onClick = onRename) { Text("改名", color = TextMuted, fontSize = 12.sp) }
+        TextButton(onClick = onDelete) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
+    }
+    LedgerState.childrenOf(cat.id).forEach { child ->
+        CatManageNode(type, child, depth + 1, onAddChild, onRename, onDelete)
+    }
+}
+
+// ---------- 预算管理（整体 + 按分类） ----------
+@Composable
+fun BudgetManageScreen(onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    var budgetText by remember { mutableStateOf(if (LedgerState.budget > 0) Util.moneyNoSymbol(LedgerState.budget) else "") }
+    val catPaths = remember { LedgerState.categories.map { LedgerState.catPath(it.id) }.distinct().sorted() }
+    var catInputs by remember {
+        mutableStateOf(catPaths.associateWith { (LedgerState.categoryBudgets[it]?.let { v -> Util.moneyNoSymbol(v) } ?: "") })
+    }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("‹ 返回", Modifier.clickable { onBack() }, color = Brand, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("预算管理", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextMain)
+            Spacer(Modifier.weight(1f))
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // 整体月预算
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp)) {
+                Text("每月总预算", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = budgetText, onValueChange = { budgetText = it }, Modifier.weight(1f),
+                        placeholder = { Text("例如 2000") }, prefix = { Text("¥", color = TextMuted) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = androidx.compose.material3.TextFieldDefaults.colors(
+                            focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                            focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = {
+                        val b = budgetText.toDoubleOrNull()
+                        if (b != null && b >= 0) { LedgerState.setBudgetValue(b); toast(ctx, "预算已设为 ${Util.money(b)}") }
+                        else toast(ctx, "请输入合法数字")
+                    }, colors = ButtonDefaults.buttonColors(containerColor = Brand)) { Text("保存", color = Color.White) }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("分类预算（每月）", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+        Spacer(Modifier.height(8.dp))
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (catPaths.isEmpty()) {
+                    Text("暂无分类，去“分类管理”添加后再设置分类预算。", color = TextMuted, fontSize = 13.sp)
+                } else {
+                    catPaths.forEach { cp ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(cp, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
+                            Spacer(Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = catInputs[cp] ?: "", onValueChange = { catInputs = catInputs + (cp to it) },
+                                Modifier.width(110.dp), placeholder = { Text("不限") }, prefix = { Text("¥", color = TextMuted) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                    focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                                    focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                                ),
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = {
+                catInputs.forEach { (cp, v) -> val num = v.toDoubleOrNull(); LedgerState.setCatBudget(cp, num ?: 0.0) }
+                toast(ctx, "分类预算已保存")
+            },
+            Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Brand),
+            shape = RoundedCornerShape(12.dp)
+        ) { Text("保存分类预算", fontSize = 16.sp, color = Color.White) }
     }
 }
 
@@ -276,8 +382,10 @@ fun buildBackupJson(): String {
             if (c.parentId != null) put("parentId", c.parentId)
         })
     }
+    val cb = JSONObject()
+    LedgerState.categoryBudgets.forEach { (k, v) -> cb.put(k, v) }
     return JSONObject().put("app", "my-ledger").put("version", 1).put("budget", LedgerState.budget)
-        .put("transactions", arr).put("categories", cats).toString(2)
+        .put("transactions", arr).put("categories", cats).put("catBudgets", cb).toString(2)
 }
 
 fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
@@ -301,7 +409,6 @@ fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
                 )
             )
         }
-        // 恢复分类（若存在）
         val catsArr = root.optJSONArray("categories")
         if (catsArr != null) {
             val newCats = mutableListOf<Category>()
@@ -319,6 +426,12 @@ fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
             }
             LedgerState.categories.clear()
             LedgerState.categories.addAll(newCats)
+        }
+        val cbObj = root.optJSONObject("catBudgets")
+        LedgerState.categoryBudgets.clear()
+        if (cbObj != null) {
+            val kit = cbObj.keys()
+            while (kit.hasNext()) { val k = kit.next() as String; LedgerState.categoryBudgets[k] = cbObj.getDouble(k) }
         }
         if (overwrite) {
             LedgerState.replaceAll(list, bud)

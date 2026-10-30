@@ -12,7 +12,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -51,8 +53,11 @@ object LedgerState {
 
     val transactions: SnapshotStateList<Tx> = mutableStateListOf()
 
-    /** 自定义分类（支持多级） */
+    /** 自定义分类（支持多级，最多四级） */
     val categories: SnapshotStateList<Category> = mutableStateListOf()
+
+    /** 分类预算：分类路径 -> 每月预算金额 */
+    val categoryBudgets: SnapshotStateMap<String, Double> = mutableStateMapOf()
 
     fun init(context: Context) {
         ctx = context.applicationContext
@@ -104,6 +109,16 @@ object LedgerState {
             } else {
                 seedCategories()
             }
+            // 加载分类预算
+            val cb = root.optJSONObject("catBudgets")
+            categoryBudgets.clear()
+            if (cb != null) {
+                val kit = cb.keys()
+                while (kit.hasNext()) {
+                    val k = kit.next() as String
+                    categoryBudgets[k] = cb.getDouble(k)
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -132,7 +147,9 @@ object LedgerState {
                     }
                 )
             }
-            val root = JSONObject().put("budget", budget).put("transactions", arr).put("categories", catsArray)
+            val cbObj = JSONObject()
+            categoryBudgets.forEach { (k, v) -> cbObj.put(k, v) }
+            val root = JSONObject().put("budget", budget).put("transactions", arr).put("categories", catsArray).put("catBudgets", cbObj)
             f.writeText(root.toString(2))
         } catch (e: Exception) {
             e.printStackTrace()
@@ -153,6 +170,11 @@ object LedgerState {
 
     fun setBudgetValue(b: Double) { budget = b; save() }
 
+    fun setCatBudget(catPath: String, amount: Double) {
+        if (amount <= 0.0) categoryBudgets.remove(catPath) else categoryBudgets[catPath] = amount
+        save()
+    }
+
     // ---------- 分类管理 ----------
     fun seedCategories() {
         categories.clear()
@@ -171,10 +193,36 @@ object LedgerState {
     fun catsOfType(type: String): List<Category> = categories.filter { it.type == type }
     fun topCats(type: String): List<Category> = catsOfType(type).filter { it.parentId == null }
     fun childrenOf(parentId: String): List<Category> = categories.filter { it.parentId == parentId }
+    /** 分类完整路径：最多展示四级（如 餐饮/早餐/主食/面） */
     fun catPath(id: String): String {
         val c = categories.find { it.id == id } ?: return ""
-        val p = c.parentId?.let { pid -> categories.find { it.id == pid } }
-        return if (p != null) "${p.name}/${c.name}" else c.name
+        val names = mutableListOf<String>()
+        var cur: Category? = c
+        var guard = 0
+        while (cur != null && guard < 4) {
+            names.add(0, cur.name)
+            cur = cur.parentId?.let { pid -> categories.find { it.id == pid } }
+            guard++
+        }
+        return names.joinToString("/")
+    }
+
+    /** 分类当前层级（一级=1） */
+    fun categoryDepth(id: String): Int {
+        var cur = categories.find { it.id == id }
+        var d = 0; var guard = 0
+        while (cur != null && guard < 12) { d++; cur = cur.parentId?.let { pid -> categories.find { it.id == pid } }; guard++ }
+        return d
+    }
+
+    /** 浏览路径（面包屑用）：从顶层到 id 的链条 */
+    fun breadcrumbPath(id: String?): List<Category> {
+        if (id == null) return emptyList()
+        val chain = mutableListOf<Category>()
+        var cur = categories.find { it.id == id }
+        var guard = 0
+        while (cur != null && guard < 12) { chain.add(0, cur); cur = cur.parentId?.let { pid -> categories.find { it.id == pid } }; guard++ }
+        return chain
     }
     fun findCatByPath(type: String, path: String): Category? =
         catsOfType(type).firstOrNull { catPath(it.id) == path }
@@ -182,6 +230,7 @@ object LedgerState {
     fun addCategory(name: String, type: String, parentId: String?) {
         val n = name.trim()
         if (n.isBlank()) return
+        if (parentId != null && categoryDepth(parentId) >= 4) return // 最多四级分类
         categories.add(Category(UUID.randomUUID().toString(), n, type, parentId))
         save()
     }

@@ -1,5 +1,6 @@
 package com.example.myledger
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import android.app.DatePickerDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,132 +43,57 @@ import java.util.Locale
 
 @Composable
 fun StatsScreen() {
-    var period by remember { mutableStateOf("month") }
-    var month by remember { mutableStateOf(Util.ym(java.util.Calendar.getInstance())) }
-    var statType by remember { mutableStateOf("expense") }
-    var startD by remember { mutableStateOf(Util.ym(java.util.Calendar.getInstance()) + "-01") }
+    val cal = java.util.Calendar.getInstance()
+    val ymNow = Util.ym(cal)
+    val yearNow = cal.get(java.util.Calendar.YEAR)
+    var startD by remember { mutableStateOf(ymNow + "-01") }
     var endD by remember { mutableStateOf(Util.today()) }
+    var statType by remember { mutableStateOf("expense") }
     var compareCat by remember { mutableStateOf(LedgerState.topCats("expense").firstOrNull()?.let { LedgerState.catPath(it.id) } ?: "餐饮") }
 
-    val result = analyzeRange(period, month, startD, endD)
-    val list = result.first
-    val label = result.second
-    val days = result.third
-
-    val income = list.filter { it.type == "income" }.sumOf { it.amount }
-    val expense = list.filter { it.type == "expense" }.sumOf { it.amount }
-    val profitRate = if (income > 0) (income - expense) / income * 100 else 0.0
-
-    // 趋势月份 & 收支
-    val months = trendMonths(period, month, startD, endD)
+    val list = LedgerState.transactions.filter { it.date >= startD && it.date <= endD }
+    val months = Util.monthsBetween(startD, endD)
+    val monthsCount = months.size.coerceAtLeast(1)
     val incByMonth = months.map { m -> list.filter { it.type == "income" && Util.monthOf(it.date) == m }.sumOf { it.amount } }
     val expByMonth = months.map { m -> list.filter { it.type == "expense" && Util.monthOf(it.date) == m }.sumOf { it.amount } }
 
+    val income = list.filter { it.type == "income" }.sumOf { it.amount }
+    val expense = list.filter { it.type == "expense" }.sumOf { it.amount }
+    val balance = income - expense
+    val profitRate = if (income > 0) (income - expense) / income * 100 else 0.0
+
+    val ctx = LocalContext.current
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        // 时间范围切换
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("month" to "本月", "3m" to "近3月", "6m" to "近6月", "year" to "本年", "all" to "全部", "custom" to "自定义").forEach { (p, lab) ->
-                val sel = period == p
-                Button(
-                    onClick = { period = p }, Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = if (sel) Brand else Color(0xFFE5E7EB), contentColor = if (sel) Color.White else TextMuted),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text(lab, fontSize = 11.sp) }
-            }
-        }
-
-        if (period == "custom") {
-            Spacer(Modifier.height(10.dp))
-            val ctx = LocalContext.current
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = {
-                    val p = startD.split("-").map { it.toInt() }
-                    DatePickerDialog(ctx, { _, y, mo, d -> startD = String.format("%04d-%02d-%02d", y, mo + 1, d) }, p[0], p[1] - 1, p[2]).show()
-                }, Modifier.weight(1f)) { Text("起 $startD", fontSize = 12.sp) }
-                OutlinedButton(onClick = {
-                    val p = endD.split("-").map { it.toInt() }
-                    DatePickerDialog(ctx, { _, y, mo, d -> endD = String.format("%04d-%02d-%02d", y, mo + 1, d) }, p[0], p[1] - 1, p[2]).show()
-                }, Modifier.weight(1f)) { Text("止 $endD", fontSize = 12.sp) }
-            }
-        } else if (period != "all") {
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { month = shiftMonth(month, if (period == "year") 12 else 1) }) { Text("‹") }
-                Text(label, Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                OutlinedButton(onClick = { month = shiftMonth(month, if (period == "year") 12 else 1) }) { Text("›") }
-            }
-        } else {
-            Spacer(Modifier.height(6.dp))
-            Text(label, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        }
-
-        Spacer(Modifier.height(14.dp))
-        // 汇总
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
-            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                SumItem("收入", Util.money(income), IncomeGreen)
-                SumItem("支出", Util.money(expense), ExpenseRed)
-                SumItem("结余", Util.money(income - expense), TextMain)
-                SumItem("结余率", String.format("%.0f%%", profitRate), Brand)
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        // 收支构成
-        Text("收支构成", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+        // 时间段：仅自定义
+        Text("统计时间段", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val tsel = statType == "expense"
-            Button(onClick = { statType = "expense" }, Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = if (tsel) ExpenseRed else Color(0xFFE5E7EB), contentColor = if (tsel) Color.White else TextMuted),
-                shape = RoundedCornerShape(10.dp)) { Text("支出分类") }
-            Button(onClick = { statType = "income" }, Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = if (!tsel) IncomeGreen else Color(0xFFE5E7EB), contentColor = if (!tsel) Color.White else TextMuted),
-                shape = RoundedCornerShape(10.dp)) { Text("收入分类") }
+            OutlinedButton(onClick = {
+                val p = startD.split("-").map { it.toInt() }
+                DatePickerDialog(ctx, { _, y, m, d -> startD = String.format("%04d-%02d-%02d", y, m + 1, d) }, p[0], p[1] - 1, p[2]).show()
+            }, Modifier.weight(1f)) { Text("起 $startD", fontSize = 12.sp) }
+            OutlinedButton(onClick = {
+                val p = endD.split("-").map { it.toInt() }
+                DatePickerDialog(ctx, { _, y, m, d -> endD = String.format("%04d-%02d-%02d", y, m + 1, d) }, p[0], p[1] - 1, p[2]).show()
+            }, Modifier.weight(1f)) { Text("止 $endD", fontSize = 12.sp) }
         }
-        Spacer(Modifier.height(12.dp))
-        val byCat = list.filter { it.type == statType }
-            .groupBy { it.cat }
-            .mapValues { it.value.sumOf { t -> t.amount } }
-            .toList().sortedByDescending { it.second }
-        val catEntries = byCat.map { (c, v) -> c to if (statType == "expense") Math.max(v, 0.0) else Math.max(v, 0.0) }
-            .filter { it.second > 0 }
-        if (catEntries.isEmpty()) {
-            Text("本期间暂无${if (statType == "expense") "支出" else "收入"}", color = TextMuted)
-        } else {
-            val total = catEntries.sumOf { it.second }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                PieChart(catEntries)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    catEntries.forEachIndexed { i, (c, v) ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(Color(Util.CHART_COLORS[i % Util.CHART_COLORS.size])))
-                            Spacer(Modifier.width(8.dp))
-                            Text(c, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
-                            Text("${Util.money(v)} · ${(v / total * 100).toFixed(1)}%", fontSize = 13.sp, color = TextMuted)
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            // 排行条
-            catEntries.forEachIndexed { i, (c, v) ->
-                val pct = (v / total * 100).toFloat()
-                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(c, fontSize = 13.sp, color = TextMain)
-                        Text("${Util.money(v)} · ${pct.toFixed(1)}%", fontSize = 12.sp, color = TextMuted)
-                    }
-                    Spacer(Modifier.height(4.dp))
-                    Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFEDEFF5))) {
-                        Box(Modifier.fillMaxWidth(pct / 100f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(Util.CHART_COLORS[i % Util.CHART_COLORS.size])))
-                    }
-                }
-            }
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PresetChip("本月") { startD = ymNow + "-01"; endD = Util.today() }
+            PresetChip("近3月") { startD = shiftMonth(ymNow, -2) + "-01"; endD = Util.today() }
+            PresetChip("今年") { startD = "$yearNow-01-01"; endD = Util.today() }
+            PresetChip("全部") { startD = (LedgerState.transactions.minOfOrNull { it.date } ?: "2000-01-01"); endD = Util.today() }
         }
 
+        Spacer(Modifier.height(16.dp))
+        // 汇总（重设计，宽松不拥挤）
+        SummaryCard(income, expense, balance, profitRate)
+
         Spacer(Modifier.height(20.dp))
+        // 收支构成（重设计，宽松）
+        CompositionSection(list, statType)
+
+        Spacer(Modifier.height(22.dp))
         // 月度收支趋势
         Text("月度收支趋势", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
@@ -187,9 +112,9 @@ fun StatsScreen() {
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(22.dp))
         // 分类月度对比
-        Text("分类月度对比（最近6个月净额）", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+        Text("分类月度对比", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
         var menuOpen by remember { mutableStateOf(false) }
         val allCats = LedgerState.categories.map { LedgerState.catPath(it.id) }.distinct()
@@ -202,12 +127,12 @@ fun StatsScreen() {
             }
         }
         Spacer(Modifier.height(8.dp))
-        val cmpMonths = trendMonths(period, month, startD, endD)
+        val cmpMonths = months
         val cmpVals = cmpMonths.map { m ->
-            list.filter { it.cat == compareCat && Util.monthOf(it.date) == m }.sumOf { it.amount }
+            list.filter { (it.cat == compareCat || it.cat.startsWith(compareCat + "/")) && Util.monthOf(it.date) == m }.sumOf { it.amount }
         }
         if (cmpVals.all { it == 0.0 }) {
-            Text("该分类在最近6个月没有记录", color = TextMuted)
+            Text("该分类在所选时间段没有记录", color = TextMuted)
         } else {
             CategoryCompareChart(cmpMonths, cmpVals)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -220,56 +145,190 @@ fun StatsScreen() {
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(22.dp))
         // 数据小洞察
         Text("数据小洞察", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
         val expenses = list.filter { it.type == "expense" }
         val totalEx = expenses.sumOf { it.amount }
+        val days = list.map { it.date }.distinct().size
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SoftOrange)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 InsightLine("📌 本期间共支出 ${Util.money(totalEx)}，日均约 ${Util.money(if (days > 0) totalEx / days else 0.0)}（按 $days 天计）。")
                 val maxT = expenses.maxByOrNull { it.amount }
                 if (maxT != null) InsightLine("💸 最大单笔支出：${maxT.cat} ${Util.money(Math.abs(maxT.amount))}（${maxT.date}）")
+                val byCat = list.filter { it.type == "expense" }.groupBy { it.cat }.mapValues { it.value.sumOf { t -> t.amount } }
                 val top = byCat.maxByOrNull { it.second }
                 if (top != null) InsightLine("🏆 支出最多的分类：${top.first}，共 ${Util.money(top.second)}，占支出 ${if (totalEx > 0) (top.second / totalEx * 100).toFixed(1) else "0"}%")
-                val prev = prevExpense(period, month)
-                if (prev != null) {
-                    if (prev > 0) {
-                        val diff = totalEx - prev
-                        val pct = diff / prev * 100
-                        val up = diff >= 0
-                        InsightLine("🔄 对比上一周期，支出 ${if (up) "↑" else "↓"} ${Math.abs(pct).toFixed(1)}%（${(if (up) "多花" else "少花")} ${Util.money(Math.abs(diff))}）。")
-                    } else {
-                        InsightLine("🔄 上一周期暂无支出数据，无法对比。")
+            }
+        }
+
+        Spacer(Modifier.height(22.dp))
+        // 预算分析（整体 + 分类）
+        BudgetAnalysisSection(list, monthsCount)
+    }
+}
+
+@Composable
+fun PresetChip(label: String, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, Modifier.weight(1f), shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) {
+        Text(label, fontSize = 12.sp, color = Brand)
+    }
+}
+
+/** 汇总卡：收入/支出在上，结余放大居中，结余率以进度条呈现，避免拥挤 */
+@Composable
+fun SummaryCard(income: Double, expense: Double, balance: Double, profitRate: Double) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column {
+                    Text("收入", fontSize = 13.sp, color = TextMuted)
+                    Spacer(Modifier.height(4.dp))
+                    Text(Util.money(income), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = IncomeGreen)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("支出", fontSize = 13.sp, color = TextMuted)
+                    Spacer(Modifier.height(4.dp))
+                    Text(Util.money(expense), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = ExpenseRed)
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("结余", fontSize = 14.sp, color = TextMuted)
+                Spacer(Modifier.weight(1f))
+                Text(Util.money(balance), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = TextMain)
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("结余率", fontSize = 13.sp, color = TextMuted)
+                Spacer(Modifier.weight(1f))
+                Text("${profitRate.toFixed(0)}%", fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                    color = if (profitRate >= 0) Brand else ExpenseRed)
+            }
+            Spacer(Modifier.height(6.dp))
+            val pr = profitRate.toFloat().coerceIn(0f, 100f)
+            Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFEDEFF5))) {
+                Box(Modifier.fillMaxWidth(pr / 100f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(if (profitRate >= 0) Brand else ExpenseRed))
+            }
+        }
+    }
+}
+
+/** 收支构成：饼图 + 精简图例（最多6项+其他），排行条间距加大避免拥挤 */
+@Composable
+fun CompositionSection(list: List<Tx>, statType: String) {
+    Text("收支构成", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+    Spacer(Modifier.height(8.dp))
+    // 类型切换
+    var st by remember { mutableStateOf(statType) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = { st = "expense" }, Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = if (st == "expense") ExpenseRed else Color(0xFFE5E7EB), contentColor = if (st == "expense") Color.White else TextMuted),
+            shape = RoundedCornerShape(10.dp)) { Text("支出分类") }
+        Button(onClick = { st = "income" }, Modifier.weight(1f),
+            colors = ButtonDefaults.buttonColors(containerColor = if (st == "income") IncomeGreen else Color(0xFFE5E7EB), contentColor = if (st == "income") Color.White else TextMuted),
+            shape = RoundedCornerShape(10.dp)) { Text("收入分类") }
+    }
+    Spacer(Modifier.height(12.dp))
+    val byCat = list.filter { it.type == st }
+        .groupBy { it.cat }
+        .mapValues { it.value.sumOf { t -> t.amount } }
+        .toList().sortedByDescending { it.second }
+    val catEntries = byCat.map { it.first to Math.max(it.second, 0.0) }.filter { it.second > 0 }
+    if (catEntries.isEmpty()) {
+        Text("本期间暂无${if (st == "expense") "支出" else "收入"}", color = TextMuted)
+    } else {
+        val total = catEntries.sumOf { it.second }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            PieChart(catEntries, Modifier.size(150.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                catEntries.take(6).forEachIndexed { i, (c, v) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(Color(Util.CHART_COLORS[i % Util.CHART_COLORS.size])))
+                        Spacer(Modifier.width(8.dp))
+                        Text(c, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
+                        Text("${(v / total * 100).toFixed(1)}%", fontSize = 13.sp, color = TextMuted)
+                    }
+                }
+                val others = catEntries.drop(6)
+                if (others.isNotEmpty()) {
+                    val otherSum = others.sumOf { it.second }
+                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFFB0B7C3)))
+                        Spacer(Modifier.width(8.dp))
+                        Text("其他 ${others.size} 项", Modifier.weight(1f), fontSize = 13.sp, color = TextMuted)
+                        Text("${(otherSum / total * 100).toFixed(1)}%", fontSize = 13.sp, color = TextMuted)
                     }
                 }
             }
         }
-
-        Spacer(Modifier.height(20.dp))
-        // 预算进度
-        val bud = LedgerState.budget
-        val curMonthEx = Util.monthTx(month).filter { it.type == "expense" }.sumOf { it.amount }
-        Text("本月预算", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
-        Spacer(Modifier.height(8.dp))
-        if (bud <= 0) {
-            Text("尚未设置预算，去“我的”页面设置一个每月支出上限吧。", color = TextMuted)
-        } else {
-            val ratio = (curMonthEx / bud * 100).toFloat().coerceAtMost(100f)
-            val over = curMonthEx > bud
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
-                Column(Modifier.fillMaxWidth().padding(14.dp)) {
-                    Text("已花 ${Util.money(curMonthEx)} / 预算 ${Util.money(bud)}", fontWeight = FontWeight.Bold, color = TextMain)
-                    Spacer(Modifier.height(8.dp))
-                    Box(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFEDEFF5))) {
-                        Box(Modifier.fillMaxWidth(ratio / 100f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(if (over) ExpenseRed else Brand))
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    Text("还剩 ${Util.money(Math.max(bud - curMonthEx, 0.0))}" + if (over) "（已超出 ${Util.money(curMonthEx - bud)}）" else "", fontSize = 13.sp, color = if (over) ExpenseRed else TextMuted)
+        Spacer(Modifier.height(14.dp))
+        catEntries.take(6).forEachIndexed { i, (c, v) ->
+            val pct = (v / total * 100).toFloat()
+            Column(Modifier.fillMaxWidth().padding(vertical = 7.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(c, fontSize = 13.sp, color = TextMain)
+                    Text("${Util.money(v)} · ${pct.toFixed(1)}%", fontSize = 12.sp, color = TextMuted)
+                }
+                Spacer(Modifier.height(5.dp))
+                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0xFFEDEFF5))) {
+                    Box(Modifier.fillMaxWidth(pct / 100f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(Util.CHART_COLORS[i % Util.CHART_COLORS.size])))
                 }
             }
-            if (over) Text("⚠️ 本月支出已超出预算，注意控制哦！", color = ExpenseRed, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
+/** 预算分析：整体月预算 + 按分类预算（按所选时间段时长折算） */
+@Composable
+fun BudgetAnalysisSection(list: List<Tx>, monthsCount: Int) {
+    Text("预算分析", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+    Spacer(Modifier.height(8.dp))
+    val bud = LedgerState.budget
+    val catBud = LedgerState.categoryBudgets.toList().sortedByDescending { it.second }
+    if (bud <= 0 && catBud.isEmpty()) {
+        Text("尚未设置预算，去“我的 → 预算管理”设置每月预算或分类预算吧。", color = TextMuted)
+    } else {
+        if (bud > 0) {
+            val rangeBud = bud * monthsCount
+            val spent = list.filter { it.type == "expense" }.sumOf { it.amount }
+            BudgetBarCard("整体月预算（${monthsCount}个月）", spent, rangeBud)
+        }
+        if (catBud.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Text("分类预算", fontSize = 13.sp, color = TextMuted)
+            Spacer(Modifier.height(8.dp))
+            catBud.forEach { (cp, lim) ->
+                val spent = list.filter { it.type == "expense" && (it.cat == cp || it.cat.startsWith(cp + "/")) }.sumOf { it.amount }
+                val rangeLim = lim * monthsCount
+                BudgetBarCard(cp, spent, rangeLim)
+            }
+        }
+    }
+}
+
+@Composable
+fun BudgetBarCard(label: String, spent: Double, limit: Double) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                Text("${Util.money(spent)} / ${Util.money(limit)}", fontSize = 13.sp, color = TextMuted)
+            }
+            Spacer(Modifier.height(8.dp))
+            val ratio = if (limit > 0) (spent / limit * 100).toFloat().coerceAtMost(100f) else 0f
+            val over = spent > limit && limit > 0
+            Box(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFEDEFF5))) {
+                Box(Modifier.fillMaxWidth(ratio / 100f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(if (over) ExpenseRed else Brand))
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "还剩 ${Util.money(Math.max(limit - spent, 0.0))}" + if (over) "（已超出 ${Util.money(spent - limit)}）" else "",
+                fontSize = 13.sp, color = if (over) ExpenseRed else TextMuted
+            )
         }
     }
 }
@@ -301,7 +360,7 @@ fun LegendDot(color: Color, label: String) {
 fun Double.toFixed(n: Int): String = String.format(Locale.US, "%.${n}f", this)
 fun Float.toFixed(n: Int): String = String.format(Locale.US, "%.${n}f", this)
 
-/** 根据时间范围 + 锚点月份，返回（筛选后的记录, 标签, 有记录的天数） */
+/** 根据时间范围，返回（筛选后的记录, 标签, 有记录的天数） */
 fun analyzeRange(period: String, month: String, start: String, end: String): Triple<List<Tx>, String, Int> {
     val all = LedgerState.transactions
     val (y, m) = month.split("-").map { it.toInt() }
