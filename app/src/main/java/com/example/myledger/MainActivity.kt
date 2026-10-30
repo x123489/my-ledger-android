@@ -22,12 +22,20 @@ import java.util.UUID
 /** 一条记账记录 */
 data class Tx(
     val id: String,
-    val type: String,        // "expense" | "income"
-    val cat: String,
+    val type: String,        // "expense" | "income" | "transfer" | "invest"
+    val cat: String,         // 分类路径，如 "餐饮" 或 "餐饮/早餐"；转账为 "招行→工行"
     val amount: Double,      // 可以为负数（冲销多记）
     val date: String,        // YYYY-MM-DD
     val note: String,
     val tags: List<String>
+)
+
+/** 自定义分类（支持多级：parentId 为空表示一级分类） */
+data class Category(
+    val id: String,
+    val name: String,
+    val type: String,        // "expense" | "income" | "invest"
+    val parentId: String?    // 父分类 id，为空即一级
 )
 
 /** 全局账目状态：数据就存在手机真实文件夹里 */
@@ -43,6 +51,9 @@ object LedgerState {
 
     val transactions: SnapshotStateList<Tx> = mutableStateListOf()
 
+    /** 自定义分类（支持多级） */
+    val categories: SnapshotStateList<Category> = mutableStateListOf()
+
     fun init(context: Context) {
         ctx = context.applicationContext
         load()
@@ -50,8 +61,9 @@ object LedgerState {
 
     fun load() {
         transactions.clear()
-        val f = file ?: return
-        if (!f.exists()) return
+        categories.clear()
+        val f = file
+        if (f == null || !f.exists()) { seedCategories(); return }
         try {
             val root = JSONObject(f.readText())
             budget = root.optDouble("budget", 0.0)
@@ -74,6 +86,24 @@ object LedgerState {
                     )
                 )
             }
+            // 加载分类
+            val catsArr = root.optJSONArray("categories")
+            if (catsArr != null && catsArr.length() > 0) {
+                for (i in 0 until catsArr.length()) {
+                    val o = catsArr.getJSONObject(i)
+                    val pidRaw = o.optString("parentId", "")
+                    categories.add(
+                        Category(
+                            id = o.optString("id", UUID.randomUUID().toString()),
+                            name = o.optString("name", "其他"),
+                            type = o.optString("type", "expense"),
+                            parentId = if (pidRaw.isBlank()) null else pidRaw
+                        )
+                    )
+                }
+            } else {
+                seedCategories()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -93,7 +123,16 @@ object LedgerState {
                     }
                 )
             }
-            val root = JSONObject().put("budget", budget).put("transactions", arr)
+            val catsArray = JSONArray()
+            categories.forEach { c ->
+                catsArray.put(
+                    JSONObject().apply {
+                        put("id", c.id); put("name", c.name); put("type", c.type)
+                        if (c.parentId != null) put("parentId", c.parentId)
+                    }
+                )
+            }
+            val root = JSONObject().put("budget", budget).put("transactions", arr).put("categories", catsArray)
             f.writeText(root.toString(2))
         } catch (e: Exception) {
             e.printStackTrace()
@@ -113,6 +152,56 @@ object LedgerState {
     }
 
     fun setBudgetValue(b: Double) { budget = b; save() }
+
+    // ---------- 分类管理 ----------
+    fun seedCategories() {
+        categories.clear()
+        val seeds = listOf(
+            "expense" to listOf("餐饮", "交通", "购物", "居住", "娱乐", "医疗", "教育", "人情", "其他"),
+            "income" to listOf("工资", "奖金", "理财", "兼职", "红包", "其他"),
+            "invest" to listOf("理财", "基金", "股票", "黄金", "数字货币", "其他")
+        )
+        seeds.forEach { (type, names) ->
+            names.forEach { name ->
+                categories.add(Category(UUID.randomUUID().toString(), name, type, null))
+            }
+        }
+    }
+
+    fun catsOfType(type: String): List<Category> = categories.filter { it.type == type }
+    fun topCats(type: String): List<Category> = catsOfType(type).filter { it.parentId == null }
+    fun childrenOf(parentId: String): List<Category> = categories.filter { it.parentId == parentId }
+    fun catPath(id: String): String {
+        val c = categories.find { it.id == id } ?: return ""
+        val p = c.parentId?.let { pid -> categories.find { it.id == pid } }
+        return if (p != null) "${p.name}/${c.name}" else c.name
+    }
+    fun findCatByPath(type: String, path: String): Category? =
+        catsOfType(type).firstOrNull { catPath(it.id) == path }
+
+    fun addCategory(name: String, type: String, parentId: String?) {
+        val n = name.trim()
+        if (n.isBlank()) return
+        categories.add(Category(UUID.randomUUID().toString(), n, type, parentId))
+        save()
+    }
+    fun renameCategory(id: String, newName: String) {
+        val i = categories.indexOfFirst { it.id == id }
+        if (i >= 0) categories[i] = categories[i].copy(name = newName.trim())
+        save()
+    }
+    fun deleteCategory(id: String) {
+        val toRemove = mutableSetOf(id)
+        var changed = true
+        while (changed) {
+            changed = false
+            categories.forEach {
+                if (it.parentId in toRemove && it.id !in toRemove) { toRemove.add(it.id); changed = true }
+            }
+        }
+        categories.removeAll { it.id in toRemove }
+        save()
+    }
 
     fun replaceAll(list: List<Tx>, newBudget: Double? = null) {
         transactions.clear()
@@ -174,14 +263,16 @@ object Util {
         0xFF84CC16.toInt(), 0xFFF97316.toInt(), 0xFF3B82F6.toInt(), 0xFFEAB308.toInt()
     )
 
+    /** 金额统一显示两位小数 */
     fun money(v: Double): String {
         val r = Math.round(v * 100) / 100.0
-        return if (r == Math.floor(r) && r.isFinite()) "¥${r.toLong()}" else "¥${String.format("%.2f", r)}"
+        return "¥${String.format("%.2f", r)}"
     }
 
+    /** 不带符号、统一两位小数 */
     fun moneyNoSymbol(v: Double): String {
         val r = Math.round(v * 100) / 100.0
-        return if (r == Math.floor(r) && r.isFinite()) "${r.toLong()}" else String.format("%.2f", r)
+        return String.format("%.2f", r)
     }
 
     /** 带正负号的金额显示：支出负数显示成绿色“+¥x”（冲销/退回）；转账/投资为中性，不加正负号 */
@@ -266,6 +357,22 @@ object Util {
     fun monthOf(date: String): String = if (date.length >= 7) date.substring(0, 7) else ""
 
     fun monthTx(month: String): List<Tx> = LedgerState.transactions.filter { monthOf(it.date) == month }
+
+    fun monthsBetween(start: String, end: String): List<String> {
+        val sy = start.substring(0, 4).toIntOrNull() ?: return emptyList()
+        val sm = start.substring(5, 7).toIntOrNull() ?: return emptyList()
+        val ey = end.substring(0, 4).toIntOrNull() ?: return emptyList()
+        val em = end.substring(5, 7).toIntOrNull() ?: return emptyList()
+        val out = mutableListOf<String>()
+        var y = sy; var m = sm
+        while (y < ey || (y == ey && m <= em)) {
+            out.add(String.format("%04d-%02d", y, m))
+            m++
+            if (m > 12) { m = 1; y++ }
+            if (out.size > 120) break
+        }
+        return out
+    }
 
     /** 解析 CSV 文本，返回 (有效记录列表, 新增数, 无效数) */
     fun parseCsv(text: String): Triple<List<Tx>, Int, Int> {

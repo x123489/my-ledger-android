@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import android.app.DatePickerDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,9 +46,11 @@ fun StatsScreen() {
     var period by remember { mutableStateOf("month") }
     var month by remember { mutableStateOf(Util.ym(java.util.Calendar.getInstance())) }
     var statType by remember { mutableStateOf("expense") }
-    var compareCat by remember { mutableStateOf(Util.EXPENSE_CATS[0]) }
+    var startD by remember { mutableStateOf(Util.ym(java.util.Calendar.getInstance()) + "-01") }
+    var endD by remember { mutableStateOf(Util.today()) }
+    var compareCat by remember { mutableStateOf(LedgerState.topCats("expense").firstOrNull()?.let { LedgerState.catPath(it.id) } ?: "餐饮") }
 
-    val result = analyzeRange(period, month)
+    val result = analyzeRange(period, month, startD, endD)
     val list = result.first
     val label = result.second
     val days = result.third
@@ -56,24 +60,37 @@ fun StatsScreen() {
     val profitRate = if (income > 0) (income - expense) / income * 100 else 0.0
 
     // 趋势月份 & 收支
-    val months = trendMonths(period, month)
+    val months = trendMonths(period, month, startD, endD)
     val incByMonth = months.map { m -> list.filter { it.type == "income" && Util.monthOf(it.date) == m }.sumOf { it.amount } }
     val expByMonth = months.map { m -> list.filter { it.type == "expense" && Util.monthOf(it.date) == m }.sumOf { it.amount } }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         // 时间范围切换
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("month" to "本月", "3m" to "近3月", "year" to "本年", "all" to "全部").forEach { (p, lab) ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("month" to "本月", "3m" to "近3月", "6m" to "近6月", "year" to "本年", "all" to "全部", "custom" to "自定义").forEach { (p, lab) ->
                 val sel = period == p
                 Button(
                     onClick = { period = p }, Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = if (sel) Brand else Color(0xFFE5E7EB), contentColor = if (sel) Color.White else TextMuted),
                     shape = RoundedCornerShape(10.dp)
-                ) { Text(lab, fontSize = 13.sp) }
+                ) { Text(lab, fontSize = 11.sp) }
             }
         }
 
-        if (period != "all") {
+        if (period == "custom") {
+            Spacer(Modifier.height(10.dp))
+            val ctx = LocalContext.current
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    val p = startD.split("-").map { it.toInt() }
+                    DatePickerDialog(ctx, { _, y, mo, d -> startD = String.format("%04d-%02d-%02d", y, mo + 1, d) }, p[0], p[1] - 1, p[2]).show()
+                }, Modifier.weight(1f)) { Text("起 $startD", fontSize = 12.sp) }
+                OutlinedButton(onClick = {
+                    val p = endD.split("-").map { it.toInt() }
+                    DatePickerDialog(ctx, { _, y, mo, d -> endD = String.format("%04d-%02d-%02d", y, mo + 1, d) }, p[0], p[1] - 1, p[2]).show()
+                }, Modifier.weight(1f)) { Text("止 $endD", fontSize = 12.sp) }
+            }
+        } else if (period != "all") {
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = { month = shiftMonth(month, if (period == "year") 12 else 1) }) { Text("‹") }
@@ -175,7 +192,7 @@ fun StatsScreen() {
         Text("分类月度对比（最近6个月净额）", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
         var menuOpen by remember { mutableStateOf(false) }
-        val allCats = (Util.EXPENSE_CATS + Util.INCOME_CATS).distinct()
+        val allCats = LedgerState.categories.map { LedgerState.catPath(it.id) }.distinct()
         Box {
             OutlinedButton(onClick = { menuOpen = true }) { Text("分类：$compareCat") }
             DropdownMenu(menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -185,7 +202,7 @@ fun StatsScreen() {
             }
         }
         Spacer(Modifier.height(8.dp))
-        val cmpMonths = trendMonths("6m", month)
+        val cmpMonths = trendMonths(period, month, startD, endD)
         val cmpVals = cmpMonths.map { m ->
             list.filter { it.cat == compareCat && Util.monthOf(it.date) == m }.sumOf { it.amount }
         }
@@ -285,7 +302,7 @@ fun Double.toFixed(n: Int): String = String.format(Locale.US, "%.${n}f", this)
 fun Float.toFixed(n: Int): String = String.format(Locale.US, "%.${n}f", this)
 
 /** 根据时间范围 + 锚点月份，返回（筛选后的记录, 标签, 有记录的天数） */
-fun analyzeRange(period: String, month: String): Triple<List<Tx>, String, Int> {
+fun analyzeRange(period: String, month: String, start: String, end: String): Triple<List<Tx>, String, Int> {
     val all = LedgerState.transactions
     val (y, m) = month.split("-").map { it.toInt() }
     val list = when (period) {
@@ -294,13 +311,20 @@ fun analyzeRange(period: String, month: String): Triple<List<Tx>, String, Int> {
             val months = (0..2).map { offset -> shiftMonth(month, -offset) }
             all.filter { Util.monthOf(it.date) in months }
         }
+        "6m" -> {
+            val months = (0..5).map { offset -> shiftMonth(month, -offset) }
+            all.filter { Util.monthOf(it.date) in months }
+        }
         "year" -> all.filter { it.date.startsWith("$y-") }
+        "custom" -> all.filter { it.date >= start && it.date <= end }
         else -> all
     }
     val label = when (period) {
         "month" -> month
         "3m" -> "近3月"
+        "6m" -> "近6月"
         "year" -> "${y}年"
+        "custom" -> "$start ~ $end"
         else -> "全部"
     }
     val days = list.map { it.date }.distinct().size
@@ -308,7 +332,7 @@ fun analyzeRange(period: String, month: String): Triple<List<Tx>, String, Int> {
 }
 
 /** 趋势图用的月份列表 */
-fun trendMonths(period: String, month: String): List<String> {
+fun trendMonths(period: String, month: String, start: String, end: String): List<String> {
     val y = month.split("-").map { it.toInt() }.firstOrNull()
         ?: java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     return when (period) {
@@ -316,6 +340,7 @@ fun trendMonths(period: String, month: String): List<String> {
         "3m" -> (0..2).map { offset -> shiftMonth(month, -offset) }
         "6m" -> (0..5).map { offset -> shiftMonth(month, -offset) }
         "year" -> (0..11).map { i -> String.format("%04d-%02d", y, i + 1) }
+        "custom" -> Util.monthsBetween(start, end)
         "all" -> LedgerState.transactions.map { Util.monthOf(it.date) }.filter { it.isNotBlank() }.distinct().sorted()
         else -> listOf(month)
     }.distinct().sorted()

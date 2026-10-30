@@ -141,14 +141,14 @@ fun LedgerApp() {
 fun AddScreen(editing: Tx?, onDone: () -> Unit) {
     val ctx = LocalContext.current
     var type by remember { mutableStateOf("expense") }
-    var cat by remember { mutableStateOf(Util.EXPENSE_CATS[0]) }
+    var selectedCatId by remember { mutableStateOf<String?>(null) }
+    var openParentId by remember { mutableStateOf<String?>(null) }
     var transferFrom by remember { mutableStateOf("") }
     var transferTo by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf("0") }
     var date by remember { mutableStateOf(Util.today()) }
     var note by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
-    var showCalc by remember { mutableStateOf(false) }
 
     LaunchedEffect(editing?.id) {
         if (editing != null) {
@@ -157,9 +157,11 @@ fun AddScreen(editing: Tx?, onDone: () -> Unit) {
                 val p = editing.cat.split("→")
                 transferFrom = p.getOrNull(0) ?: ""
                 transferTo = p.getOrNull(1) ?: ""
-                cat = ""
+                selectedCatId = null; openParentId = null
             } else {
-                cat = editing.cat
+                val f = LedgerState.findCatByPath(editing.type, editing.cat)
+                selectedCatId = f?.id
+                openParentId = f?.parentId
                 transferFrom = ""; transferTo = ""
             }
             amount = Util.moneyNoSymbol(editing.amount)
@@ -169,164 +171,170 @@ fun AddScreen(editing: Tx?, onDone: () -> Unit) {
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-    ) {
-        if (editing != null) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SoftOrange)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("正在修改一笔记录", color = Brand, fontWeight = FontWeight.Bold)
-                    TextButton(onClick = onDone) { Text("取消编辑", color = TextMuted) }
+    val typeOptions = listOf(
+        "expense" to "支出", "income" to "收入",
+        "transfer" to "转账", "invest" to "投资"
+    )
+    val typeColor = mapOf(
+        "expense" to ExpenseRed, "income" to IncomeGreen,
+        "transfer" to TransferBlue, "invest" to InvestViolet
+    )
+
+    Column(Modifier.fillMaxSize().background(LightBg)) {
+        // 内容区可滚动，但保存按钮固定在底部，始终可见
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)
+        ) {
+            if (editing != null) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = SoftOrange)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("正在修改一笔记录", color = Brand, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = onDone) { Text("取消编辑", color = TextMuted) }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // 类型切换
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                typeOptions.forEach { (t, label) ->
+                    val sel = type == t
+                    Button(
+                        onClick = {
+                            type = t
+                            selectedCatId = null; openParentId = null
+                            transferFrom = ""; transferTo = ""
+                        },
+                        Modifier.weight(1f).height(40.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (sel) typeColor[t]!! else Color(0xFFE5E7EB),
+                            contentColor = if (sel) Color.White else TextMuted
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) { Text(label, fontSize = 14.sp) }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-        }
 
-        // 类型切换：支出 / 收入 / 转账 / 投资
-        val typeOptions = listOf(
-            "expense" to "支出", "income" to "收入",
-            "transfer" to "转账", "invest" to "投资"
-        )
-        val typeColor = mapOf(
-            "expense" to ExpenseRed, "income" to IncomeGreen,
-            "transfer" to TransferBlue, "invest" to InvestViolet
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            typeOptions.forEach { (t, label) ->
-                val sel = type == t
-                Button(
-                    onClick = {
-                        type = t
-                        cat = when (t) {
-                            "expense" -> Util.EXPENSE_CATS[0]
-                            "income" -> Util.INCOME_CATS[0]
-                            "invest" -> Util.INVEST_CATS[0]
-                            else -> cat
-                        }
-                    },
-                    Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (sel) typeColor[t]!! else Color(0xFFE5E7EB),
-                        contentColor = if (sel) Color.White else TextMuted
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) { Text(label, fontSize = 14.sp) }
-            }
-        }
+            Spacer(Modifier.height(14.dp))
 
-        Spacer(Modifier.height(16.dp))
-
-        // 金额 + 计算器
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // 金额 + 嵌入式计算器
             Text("金额", color = TextMuted, fontSize = 13.sp)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = { showCalc = !showCalc }) {
-                Text(if (showCalc) "收起计算器" else "🧮 计算器", color = Brand, fontSize = 13.sp)
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        if (showCalc) {
-            Calculator { v -> amount = v }
+            Spacer(Modifier.height(6.dp))
+            val disp = amount.replace("*", "×").replace("/", "÷")
+            OutlinedTextField(
+                value = disp,
+                onValueChange = { v ->
+                    val cleaned = v.replace("×", "*").replace("÷", "/")
+                    if (cleaned.isEmpty()) amount = "0"
+                    else if (cleaned.matches(Regex("""^-?\d*\.?\d*([+\-*/]-?\d*\.?\d*)*$"""))) amount = cleaned
+                },
+                Modifier.fillMaxWidth(),
+                placeholder = { Text("0.00") },
+                prefix = { Text("¥", color = TextMuted) },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                    focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
             Spacer(Modifier.height(8.dp))
+            Calculator(amount, { amount = it })
+            Spacer(Modifier.height(6.dp))
+            Text("可点计算器边算边记；支持小数，也支持 + − × ÷ 表达式。", color = TextMuted, fontSize = 11.sp)
+
+            Spacer(Modifier.height(16.dp))
+
+            // 分类 / 账户
+            if (type == "transfer") {
+                Text("转出账户", color = TextMuted, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                WrapChips(Util.TRANSFER_ACCOUNTS, transferFrom) { transferFrom = it }
+                Spacer(Modifier.height(12.dp))
+                Text("转入账户", color = TextMuted, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                WrapChips(Util.TRANSFER_ACCOUNTS, transferTo) { transferTo = it }
+            } else {
+                val tops = LedgerState.topCats(type)
+                val topSelId = selectedCatId?.let { id -> LedgerState.categories.find { it.id == id }?.parentId }
+                    ?: openParentId ?: selectedCatId
+                val children = if (openParentId != null) LedgerState.childrenOf(openParentId!!) else emptyList()
+                Text(if (type == "invest") "投资品种（可多级）" else "分类（可多级）", color = TextMuted, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                CatChipRow(tops, topSelId) { c ->
+                    val kids = LedgerState.childrenOf(c.id)
+                    if (kids.isEmpty()) { selectedCatId = c.id; openParentId = null }
+                    else { openParentId = if (openParentId == c.id) null else c.id; selectedCatId = null }
+                }
+                if (children.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    CatChipRow(children, selectedCatId) { c -> selectedCatId = c.id }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            // 日期
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("日期", color = TextMuted, fontSize = 13.sp)
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = {
+                    val p = date.split("-").map { it.toInt() }
+                    DatePickerDialog(
+                        ctx,
+                        { _, y, m, d -> date = String.format("%04d-%02d-%02d", y, m + 1, d) },
+                        p[0], p[1] - 1, p[2]
+                    ).show()
+                }) { Text(date, color = TextMain) }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            // 备注
+            Text("备注（选填）", color = TextMuted, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            TextField(
+                value = note, onValueChange = { note = it }, Modifier.fillMaxWidth(),
+                placeholder = { Text("例如：午饭") },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                    focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(14.dp))
+            // 标签
+            Text("标签（选填，空格或逗号隔开）", color = TextMuted, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            TextField(
+                value = tags, onValueChange = { tags = it }, Modifier.fillMaxWidth(),
+                placeholder = { Text("例如：旅行 必备") },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                    focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
         }
-        TextField(
-            value = amount,
-            onValueChange = { v ->
-                if (v.isEmpty()) amount = ""
-                else if (v.matches(Regex("^-?\\d*\\.?\\d*$"))) amount = v
-            },
-            Modifier.fillMaxWidth(),
-            placeholder = { Text("0.00") },
-            prefix = { Text("¥", color = TextMuted) },
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                keyboardType = KeyboardType.Decimal
-            ),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
-                focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        )
-        Text("支持小数；点“计算器”可把零碎数字加总后一键填入。", color = TextMuted, fontSize = 11.sp)
 
-        Spacer(Modifier.height(16.dp))
-        // 分类 / 账户
-        if (type == "transfer") {
-            Text("转出账户", color = TextMuted, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp))
-            WrapChips(Util.TRANSFER_ACCOUNTS, transferFrom) { transferFrom = it }
-            Spacer(Modifier.height(12.dp))
-            Text("转入账户", color = TextMuted, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp))
-            WrapChips(Util.TRANSFER_ACCOUNTS, transferTo) { transferTo = it }
-        } else {
-            val cats = if (type == "expense") Util.EXPENSE_CATS
-                       else if (type == "income") Util.INCOME_CATS
-                       else Util.INVEST_CATS
-            Text(if (type == "invest") "投资品种" else "分类", color = TextMuted, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp))
-            WrapChips(cats, cat) { cat = it }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        // 日期
-        Text("日期", color = TextMuted, fontSize = 13.sp)
-        Spacer(Modifier.height(6.dp))
-        OutlinedButton(onClick = {
-            val p = date.split("-").map { it.toInt() }
-            DatePickerDialog(
-                ctx,
-                { _, y, m, d -> date = String.format("%04d-%02d-%02d", y, m + 1, d) },
-                p[0], p[1] - 1, p[2]
-            ).show()
-        }) { Text(date, color = TextMain) }
-
-        Spacer(Modifier.height(16.dp))
-        // 备注
-        Text("备注", color = TextMuted, fontSize = 13.sp)
-        Spacer(Modifier.height(6.dp))
-        TextField(
-            value = note, onValueChange = { note = it }, Modifier.fillMaxWidth(),
-            placeholder = { Text("选填，例如：午饭") },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
-                focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(Modifier.height(16.dp))
-        // 标签
-        Text("标签（空格或逗号隔开，可参与搜索）", color = TextMuted, fontSize = 13.sp)
-        Spacer(Modifier.height(6.dp))
-        TextField(
-            value = tags, onValueChange = { tags = it }, Modifier.fillMaxWidth(),
-            placeholder = { Text("选填，例如：旅行 必备") },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
-                focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
-            ),
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        Spacer(Modifier.height(24.dp))
+        // 保存按钮：始终常驻底部，不随内容滚动
         Button(
             onClick = {
-                val amt = amount.toDoubleOrNull()
+                val expr = amount.trimEnd { it in "+-*/" }
+                val amt = Util.evalArithmetic(expr) ?: expr.toDoubleOrNull()
                 if (amt == null || amt == 0.0) { toast(ctx, "请输入非零金额"); return@Button }
                 val finalCat = if (type == "transfer") {
                     if (transferFrom.isBlank() || transferTo.isBlank()) { toast(ctx, "请选择转出和转入账户"); return@Button }
                     if (transferFrom == transferTo) { toast(ctx, "转出和转入账户不能相同"); return@Button }
                     "$transferFrom→$transferTo"
-                } else cat
-                if (finalCat.isBlank()) { toast(ctx, "请选择分类"); return@Button }
+                } else {
+                    val id = selectedCatId
+                    if (id == null) { toast(ctx, "请选择分类"); return@Button }
+                    LedgerState.catPath(id)
+                }
                 val t = Tx(
                     id = editing?.id ?: java.util.UUID.randomUUID().toString(),
                     type = type, cat = finalCat, amount = amt,
@@ -335,10 +343,11 @@ fun AddScreen(editing: Tx?, onDone: () -> Unit) {
                 )
                 if (editing != null) LedgerState.update(t) else LedgerState.add(t)
                 toast(ctx, "已保存 ✓")
-                amount = ""; note = ""; tags = ""; transferFrom = ""; transferTo = ""
+                amount = "0"; note = ""; tags = ""; transferFrom = ""; transferTo = ""
+                selectedCatId = null; openParentId = null
                 onDone()
             },
-            Modifier.fillMaxWidth().height(50.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp).height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Brand),
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -370,62 +379,15 @@ fun WrapChips(options: List<String>, selected: String, onSelect: (String) -> Uni
     }
 }
 
-/** 简单四则运算计算器：把零碎数字加总后填入金额 */
+/** 嵌入式计算器：直接操作金额字符串，可边算边记 */
 @Composable
-fun Calculator(onResult: (String) -> Unit) {
-    var expr by remember { mutableStateOf("") }
-    var fresh by remember { mutableStateOf(true) }
-    var err by remember { mutableStateOf(false) }
-
-    fun disp(): String {
-        if (err) return "错误"
-        if (expr.isEmpty()) return "0"
-        return expr.replace("*", "×").replace("/", "÷")
-    }
-    fun digit(d: String) {
-        err = false
-        if (fresh) { expr = d; fresh = false } else expr += d
-    }
-    fun dot() {
-        err = false
-        if (fresh) { expr = "0."; fresh = false; return }
-        val seg = expr.takeLastWhile { it.isDigit() || it == '.' }
-        if (!seg.contains(".")) expr += "."
-    }
-    fun op(o: String) {
-        err = false
-        if (expr.isEmpty()) { if (o == "-") { expr = "-"; fresh = false }; return }
-        if (expr.last() in "+-*/") expr = expr.dropLast(1) + o
-        else expr += o
-        fresh = false
-    }
-    fun back() { if (!err) expr = expr.dropLast(1); fresh = false }
-    fun clear() { expr = ""; fresh = true; err = false }
-    fun equal() {
-        val r = Util.evalArithmetic(expr)
-        if (r == null) { err = true; fresh = true }
-        else {
-            val s = Util.moneyNoSymbol(r)
-            expr = s; fresh = true
-            onResult(s)
-        }
-    }
-
+fun Calculator(amount: String, onChange: (String) -> Unit) {
     Card(
         Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = SoftOrange)
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Box(
-                Modifier.fillMaxWidth().height(48.dp)
-                    .background(CardWhite, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Text(disp(), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextMain, maxLines = 1)
-            }
-            Spacer(Modifier.height(10.dp))
             val keys = listOf(
                 listOf("7", "8", "9", "/"),
                 listOf("4", "5", "6", "*"),
@@ -440,13 +402,16 @@ fun Calculator(onResult: (String) -> Unit) {
                         Button(
                             onClick = {
                                 when (key) {
-                                    "C" -> clear()
-                                    "/" -> op("/"); "*" -> op("*"); "-" -> op("-"); "+" -> op("+")
-                                    "." -> dot()
-                                    else -> digit(key)
+                                    "C" -> onChange("0")
+                                    "/" -> calcOp(amount, onChange, "/")
+                                    "*" -> calcOp(amount, onChange, "*")
+                                    "-" -> calcOp(amount, onChange, "-")
+                                    "+" -> calcOp(amount, onChange, "+")
+                                    "." -> calcDot(amount, onChange)
+                                    else -> calcDigit(amount, onChange, key)
                                 }
                             },
-                            Modifier.weight(1f).height(46.dp),
+                            Modifier.weight(1f).height(44.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = when {
                                     isC -> Color(0xFFFFE0E0)
@@ -469,17 +434,60 @@ fun Calculator(onResult: (String) -> Unit) {
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = { back() },
-                    Modifier.weight(1f).height(46.dp),
+                    onClick = { calcBack(amount, onChange) },
+                    Modifier.weight(1f).height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEDEFF5), contentColor = TextMain),
                     shape = RoundedCornerShape(10.dp)
-                ) { Text("⌫ 删除", fontSize = 16.sp) }
+                ) { Text("⌫", fontSize = 18.sp) }
                 Button(
-                    onClick = { equal() },
-                    Modifier.weight(2f).height(46.dp),
+                    onClick = { calcEqual(amount, onChange) },
+                    Modifier.weight(2f).height(44.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandDark),
                     shape = RoundedCornerShape(10.dp)
-                ) { Text("= 填入金额", fontSize = 17.sp, color = Color.White) }
+                ) { Text("= 计算", fontSize = 17.sp, color = Color.White) }
+            }
+        }
+    }
+}
+
+private fun calcDigit(s: String, set: (String) -> Unit, d: String) {
+    if (s == "0") set(d) else set(s + d)
+}
+private fun calcDot(s: String, set: (String) -> Unit) {
+    val seg = s.takeLastWhile { it.isDigit() || it == '.' }
+    if (!seg.contains('.')) set(s + ".")
+}
+private fun calcOp(s: String, set: (String) -> Unit, o: String) {
+    if (s.isEmpty()) { if (o == "-") set("-"); return }
+    if (s.last() in "+-*/") set(s.dropLast(1) + o) else set(s + o)
+}
+private fun calcBack(s: String, set: (String) -> Unit) {
+    val v = s.dropLast(1)
+    set(if (v.isEmpty()) "0" else v)
+}
+private fun calcEqual(s: String, set: (String) -> Unit) {
+    val r = Util.evalArithmetic(s)
+    if (r != null) set(Util.moneyNoSymbol(r)) else set(s)
+}
+
+/** 分类选择行（横向滚动，支持多级） */
+@Composable
+fun CatChipRow(cats: List<Category>, selectedId: String?, onSelect: (Category) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        cats.forEach { c ->
+            val sel = c.id == selectedId
+            val hasKids = LedgerState.childrenOf(c.id).isNotEmpty()
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(if (sel) Brand else Color(0xFFEDEFF5))
+                    .clickable { onSelect(c) }
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
+            ) {
+                Text(c.name + if (hasKids) " ▾" else "", color = if (sel) Color.White else TextMain, fontSize = 14.sp)
             }
         }
     }

@@ -53,6 +53,12 @@ fun MineScreen() {
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreDlg by remember { mutableStateOf(false) }
     var showClearDlg by remember { mutableStateOf(false) }
+    var showCatDlg by remember { mutableStateOf(false) }
+    var catDlgType by remember { mutableStateOf("expense") }
+    var catDlgParentId by remember { mutableStateOf<String?>(null) }
+    var catDlgEditId by remember { mutableStateOf<String?>(null) }
+    var catDlgName by remember { mutableStateOf("") }
+    var catDelId by remember { mutableStateOf<String?>(null) }
 
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) { pendingRestoreUri = uri; showRestoreDlg = true }
@@ -129,6 +135,33 @@ fun MineScreen() {
         }
 
         Spacer(Modifier.height(16.dp))
+        Text("分类管理（自定义名称 / 增删改 / 支持多级）", fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.height(8.dp))
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("expense" to "支出分类", "income" to "收入分类", "invest" to "投资分类").forEach { (type, label) ->
+                    Text(label, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextMain)
+                    LedgerState.topCats(type).forEach { top ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(top.name, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
+                            TextButton(onClick = { catDlgType = type; catDlgParentId = top.id; catDlgEditId = null; catDlgName = ""; showCatDlg = true }) { Text("加子分类", color = Brand, fontSize = 12.sp) }
+                            TextButton(onClick = { catDlgType = type; catDlgParentId = null; catDlgEditId = top.id; catDlgName = top.name; showCatDlg = true }) { Text("改名", color = TextMuted, fontSize = 12.sp) }
+                            TextButton(onClick = { catDelId = top.id }) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
+                        }
+                        LedgerState.childrenOf(top.id).forEach { child ->
+                            Row(Modifier.fillMaxWidth().padding(start = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("· " + child.name, Modifier.weight(1f), fontSize = 13.sp, color = TextMuted)
+                                TextButton(onClick = { catDlgType = type; catDlgParentId = top.id; catDlgEditId = child.id; catDlgName = child.name; showCatDlg = true }) { Text("改名", color = TextMuted, fontSize = 12.sp) }
+                                TextButton(onClick = { catDelId = child.id }) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
+                            }
+                        }
+                    }
+                    BigBtn("＋ 添加${label}") { catDlgType = type; catDlgParentId = null; catDlgEditId = null; catDlgName = ""; showCatDlg = true }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
         Text("说明：本 App 把数据直接存在你手机的文件夹里（不是浏览器），换手机时用“备份/恢复”即可迁移。导出/备份的文件会自动放进手机“下载/Ledger”文件夹，方便你查看和搬运。", fontSize = 12.sp, color = TextMuted)
     }
 
@@ -166,6 +199,53 @@ fun MineScreen() {
             dismissButton = { TextButton(onClick = { showClearDlg = false }) { Text("取消") } }
         )
     }
+
+    // 分类新增 / 改名对话框
+    if (showCatDlg) {
+        AlertDialog(
+            onDismissRequest = { showCatDlg = false },
+            title = { Text(if (catDlgEditId != null) "修改分类名称" else "新建分类") },
+            text = {
+                Column {
+                    Text(if (catDlgParentId != null) "将作为子分类添加（支持多级）" else "作为一级分类", fontSize = 13.sp, color = TextMuted)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = catDlgName, onValueChange = { catDlgName = it }, Modifier.fillMaxWidth(),
+                        placeholder = { Text("分类名称") }, singleLine = true,
+                        colors = androidx.compose.material3.TextFieldDefaults.colors(
+                            focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                            focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val n = catDlgName.trim()
+                    if (n.isNotBlank()) {
+                        if (catDlgEditId != null) LedgerState.renameCategory(catDlgEditId!!, n)
+                        else LedgerState.addCategory(n, catDlgType, catDlgParentId)
+                    }
+                    showCatDlg = false
+                }) { Text("确定", color = Brand) }
+            },
+            dismissButton = { TextButton(onClick = { showCatDlg = false }) { Text("取消") } }
+        )
+    }
+
+    // 分类删除确认（级联删除子分类）
+    catDelId?.let { id ->
+        val c = LedgerState.categories.find { it.id == id }
+        val hasKids = c?.let { LedgerState.childrenOf(it.id).isNotEmpty() } ?: false
+        AlertDialog(
+            onDismissRequest = { catDelId = null },
+            title = { Text("删除分类？") },
+            text = { Text(if (hasKids) "该分类下还有子分类，将一并删除。已记账的历史记录会保留，仅该分类不再可选。" else "已记账的历史记录会保留，仅该分类不再可选。") },
+            confirmButton = { TextButton(onClick = { LedgerState.deleteCategory(id); catDelId = null }) { Text("删除", color = ExpenseRed) } },
+            dismissButton = { TextButton(onClick = { catDelId = null }) { Text("取消") } }
+        )
+    }
 }
 
 @Composable
@@ -189,7 +269,15 @@ fun buildBackupJson(): String {
             put("amount", t.amount); put("date", t.date); put("note", t.note); put("tags", JSONArray(t.tags))
         })
     }
-    return JSONObject().put("app", "my-ledger").put("version", 1).put("budget", LedgerState.budget).put("transactions", arr).toString(2)
+    val cats = JSONArray()
+    LedgerState.categories.forEach { c ->
+        cats.put(JSONObject().apply {
+            put("id", c.id); put("name", c.name); put("type", c.type)
+            if (c.parentId != null) put("parentId", c.parentId)
+        })
+    }
+    return JSONObject().put("app", "my-ledger").put("version", 1).put("budget", LedgerState.budget)
+        .put("transactions", arr).put("categories", cats).toString(2)
 }
 
 fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
@@ -213,6 +301,25 @@ fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
                 )
             )
         }
+        // 恢复分类（若存在）
+        val catsArr = root.optJSONArray("categories")
+        if (catsArr != null) {
+            val newCats = mutableListOf<Category>()
+            for (i in 0 until catsArr.length()) {
+                val o = catsArr.getJSONObject(i)
+                val pidRaw = o.optString("parentId", "")
+                newCats.add(
+                    Category(
+                        o.optString("id", java.util.UUID.randomUUID().toString()),
+                        o.optString("name", "其他"),
+                        o.optString("type", "expense"),
+                        if (pidRaw.isBlank()) null else pidRaw
+                    )
+                )
+            }
+            LedgerState.categories.clear()
+            LedgerState.categories.addAll(newCats)
+        }
         if (overwrite) {
             LedgerState.replaceAll(list, bud)
             toast(ctx, "已覆盖恢复 ${list.size} 条")
@@ -227,6 +334,7 @@ fun doRestore(ctx: Context, uri: Uri, overwrite: Boolean) {
             LedgerState.replaceAll(merged, bud)
             toast(ctx, "已合并：新增 $added，跳过重复 ${list.size - added}")
         }
+        LedgerState.save()
     } catch (e: Exception) {
         e.printStackTrace()
         toast(ctx, "备份格式不正确")
