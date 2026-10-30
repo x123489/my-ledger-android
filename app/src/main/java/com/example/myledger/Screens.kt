@@ -389,7 +389,7 @@ fun Calculator(onResult: (String) -> Unit) {
     fun dot() {
         err = false
         if (fresh) { expr = "0."; fresh = false; return }
-        val seg = expr.substringAfterLast(Regex("[-+*/]"))
+        val seg = expr.takeLastWhile { it.isDigit() || it == '.' }
         if (!seg.contains(".")) expr += "."
     }
     fun op(o: String) {
