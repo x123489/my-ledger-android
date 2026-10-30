@@ -162,8 +162,14 @@ object FileUtil {
 object Util {
     val EXPENSE_CATS = listOf("餐饮", "交通", "购物", "居住", "娱乐", "医疗", "教育", "人情", "其他")
     val INCOME_CATS = listOf("工资", "奖金", "理财", "兼职", "红包", "其他")
+    /** 转账涉及的账户（转出/转入） */
+    val TRANSFER_ACCOUNTS = listOf("现金", "微信", "支付宝", "储蓄卡", "招行", "工行", "建行", "农行", "中行", "其他")
+    /** 投资品种 */
+    val INVEST_CATS = listOf("理财", "基金", "股票", "黄金", "数字货币", "其他")
+    /** 类型中文标签 */
+    val TYPE_LABELS = mapOf("expense" to "支出", "income" to "收入", "transfer" to "转账", "invest" to "投资")
     val CHART_COLORS = listOf(
-        0xFF6D5BFF.toInt(), 0xFF22C55E.toInt(), 0xFFF59E0B.toInt(), 0xFFEF4444.toInt(),
+        0xFFFF7A00.toInt(), 0xFF22C55E.toInt(), 0xFFF59E0B.toInt(), 0xFFEF4444.toInt(),
         0xFF06B6D4.toInt(), 0xFFA855F7.toInt(), 0xFFEC4899.toInt(), 0xFF14B8A6.toInt(),
         0xFF84CC16.toInt(), 0xFFF97316.toInt(), 0xFF3B82F6.toInt(), 0xFFEAB308.toInt()
     )
@@ -178,14 +184,70 @@ object Util {
         return if (r == Math.floor(r) && r.isFinite()) "${r.toLong()}" else String.format("%.2f", r)
     }
 
-    /** 带正负号的金额显示：支出负数显示成绿色“+¥x”（冲销/退回） */
+    /** 带正负号的金额显示：支出负数显示成绿色“+¥x”（冲销/退回）；转账/投资为中性，不加正负号 */
     fun fmtAmt(t: Tx): String {
         val m = money(Math.abs(t.amount))
-        return if (t.type == "expense") {
-            if (t.amount < 0) "+$m" else "-$m"
-        } else {
-            "+$m"
+        return when (t.type) {
+            "income" -> "+$m"
+            "expense" -> if (t.amount < 0) "+$m" else "-$m"
+            else -> m
         }
+    }
+
+    /** 类型中文标签 */
+    fun typeLabel(t: String): String = TYPE_LABELS[t] ?: "支出"
+
+    /** 简单四则运算求值（支持 + - * / 且乘除优先于加减），失败返回 null */
+    fun evalArithmetic(expr: String): Double? {
+        if (expr.isBlank()) return null
+        val tokens = mutableListOf<Any>()
+        var num = StringBuilder()
+        fun flush() {
+            if (num.isNotEmpty()) {
+                val d = num.toString().toDoubleOrNull() ?: return
+                tokens.add(d); num = StringBuilder()
+            }
+        }
+        for (c in expr) {
+            when {
+                c.isDigit() || c == '.' -> num.append(c)
+                c == '+' || c == '-' || c == '*' || c == '/' -> { flush(); tokens.add(c.toString()) }
+                else -> return null
+            }
+        }
+        flush()
+        if (tokens.isEmpty()) return null
+        // 处理开头的负号 / 正号
+        if (tokens[0] == "-") tokens.add(0, 0.0)
+        else if (tokens[0] == "+") tokens.removeAt(0)
+        // 必须为：数字 (运算符 数字)*
+        if (tokens.size % 2 == 0) return null
+        for (i in tokens.indices) {
+            val isNum = tokens[i] is Double
+            if ((i % 2 == 0) != isNum) return null
+        }
+        // 先算乘除法
+        val t2 = mutableListOf<Any>()
+        var k = 0
+        while (k < tokens.size) {
+            val tk = tokens[k]
+            if (tk is String && (tk == "*" || tk == "/")) {
+                val a = t2.removeLast() as Double
+                val b = tokens[k + 1] as Double
+                t2.add(if (tk == "*") a * b else if (b != 0.0) a / b else return null)
+                k += 2
+            } else { t2.add(tk); k++ }
+        }
+        // 再算加减
+        var res = t2[0] as Double
+        k = 1
+        while (k < t2.size) {
+            val op = t2[k] as String
+            val b = t2[k + 1] as Double
+            res = if (op == "+") res + b else res - b
+            k += 2
+        }
+        return res
     }
 
     fun today(): String {
@@ -248,13 +310,18 @@ object Util {
             val note = if (idxNote >= 0) r.getOrNull(idxNote)?.trim() ?: "" else ""
             val tags = if (idxTags >= 0) parseTags(r.getOrNull(idxTags) ?: "") else emptyList()
             val amt = amtRaw.replace("[¥,]".toRegex(), "").toDoubleOrNull()
-            val ok = date.matches(Regex("^\\d{4}-\\d{2}-\\d{2}\$")) && (type == "支出" || type == "收入")
+            val ok = date.matches(Regex("^\\d{4}-\\d{2}-\\d{2}\$")) && type in setOf("支出", "收入", "转账", "投资")
                     && cat.isNotBlank() && amt != null && amt != 0.0
             if (!ok) { bad++; continue }
             valid.add(
                 Tx(
                     id = UUID.randomUUID().toString(),
-                    type = if (type == "收入") "income" else "expense",
+                    type = when (type) {
+                        "收入" -> "income"
+                        "转账" -> "transfer"
+                        "投资" -> "invest"
+                        else -> "expense"
+                    },
                     cat = cat,
                     amount = amt!!,
                     date = date,
@@ -273,13 +340,15 @@ object Util {
         return "日期,类型,分类,金额,备注,标签\n" +
                 "2025-01-01,支出,餐饮,35.5,早餐示例（删掉这行，换成你自己的）,\n" +
                 "2025-01-05,收入,工资,8000,一月工资示例,\n" +
-                "2025-01-10,支出,餐饮,-40,冲销示例（负数用来抵消多记的账）,\n"
+                "2025-01-10,支出,餐饮,-40,冲销示例（负数用来抵消多记的账）,\n" +
+                "2025-01-15,转账,招行→工行,5000,跨行转账示例（类型可填 支出/收入/转账/投资）,\n" +
+                "2025-01-20,投资,股票,10000,买入股票示例,\n"
     }
 
     fun exportCsv(): String {
         val sb = StringBuilder("日期,类型,分类,金额,备注,标签\n")
         LedgerState.transactions.sortedBy { it.date }.forEach { t ->
-            val type = if (t.type == "income") "收入" else "支出"
+            val type = typeLabel(t.type)
             val note = t.note.replace("\"", "\"\"")
             val tags = t.tags.joinToString(" ")
             sb.append("${t.date},${type},${t.cat},${t.amount},\"${note}\",${tags}\n")

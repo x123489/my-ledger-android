@@ -60,7 +60,7 @@ fun ListScreen(onEdit: (Tx) -> Unit) {
         val q = query.lowercase()
         all.filter {
             val tags = it.tags.joinToString(" ")
-            (it.date + " " + (if (it.type == "income") "收入" else "支出") + " " + it.cat + " " + it.note + " " + tags + " " + it.amount)
+            (it.date + " " + Util.typeLabel(it.type) + " " + it.cat + " " + it.note + " " + tags + " " + it.amount)
                 .lowercase().contains(q)
         }
     }
@@ -177,17 +177,18 @@ fun TxRow(t: Tx, onEdit: (Tx) -> Unit, onDelete: () -> Unit) {
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         t.tags.forEach { tag ->
-                            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFEEF0FF)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                            Box(Modifier.clip(RoundedCornerShape(6.dp)).background(SoftOrange).padding(horizontal = 6.dp, vertical = 2.dp)) {
                                 Text(tag, fontSize = 11.sp, color = Brand)
                             }
                         }
                     }
                 }
             }
-            val amtColor = when {
-                t.type == "income" -> IncomeGreen
-                t.amount < 0 -> IncomeGreen
-                else -> ExpenseRed
+            val amtColor = when (t.type) {
+                "income" -> IncomeGreen
+                "transfer" -> TransferBlue
+                "invest" -> InvestViolet
+                else -> if (t.amount < 0) IncomeGreen else ExpenseRed
             }
             Text(Util.fmtAmt(t), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = amtColor)
             Spacer(Modifier.width(8.dp))

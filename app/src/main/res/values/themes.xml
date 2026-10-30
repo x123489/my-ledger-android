@@ -3,7 +3,7 @@
     <!-- 仅用于启动窗口（Compose 接管前的短暂背景），沿用平台无操作栏主题即可 -->
     <style name="Theme.Myledger" parent="android:Theme.Material.Light.NoActionBar">
         <!-- 启动前窗口背景，避免出现白屏闪烁 -->
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">#FFFCF6F0</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
 </resources>

@@ -209,7 +209,7 @@ fun StatsScreen() {
         Spacer(Modifier.height(8.dp))
         val expenses = list.filter { it.type == "expense" }
         val totalEx = expenses.sumOf { it.amount }
-        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F1FF))) {
+        Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = SoftOrange)) {
             Column(Modifier.fillMaxWidth().padding(14.dp)) {
                 InsightLine("📌 本期间共支出 ${Util.money(totalEx)}，日均约 ${Util.money(if (days > 0) totalEx / days else 0.0)}（按 $days 天计）。")
                 val maxT = expenses.maxByOrNull { it.amount }

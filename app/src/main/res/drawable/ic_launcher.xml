@@ -3,19 +3,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 紫色方块背景（由桌面图标遮罩裁切） -->
-    <path android:fillColor="#6d5bff" android:pathData="M0,0 H108 V108 H0 Z" />
-    <!-- 白色圆形（用路径画圆，避开 circle 的 cx/cy/r） -->
-    <path android:fillColor="#FFFFFF" android:pathData="M18,54 a36,36 0 1,1 72,0 a36,36 0 1,1 -72,0 Z" />
-    <!-- ¥ 符号（紫色，全部用填充路径，不使用描边属性） -->
-    <!-- 竖干 -->
-    <path android:fillColor="#6d5bff" android:pathData="M50,34 h8 v42 h-8 z" />
-    <!-- 左上斜 -->
-    <path android:fillColor="#6d5bff" android:pathData="M28,28 L36,28 L54,52 L46,52 Z" />
-    <!-- 右上斜 -->
-    <path android:fillColor="#6d5bff" android:pathData="M80,28 L72,28 L54,52 L62,52 Z" />
-    <!-- 底部横杠 1 -->
-    <path android:fillColor="#6d5bff" android:pathData="M34,60 h40 v7 h-40 z" />
-    <!-- 底部横杠 2 -->
-    <path android:fillColor="#6d5bff" android:pathData="M34,70 h40 v7 h-40 z" />
+    <!-- 橙子主体（橙圆，居中） -->
+    <path android:fillColor="#FF7A00" android:pathData="M20,56 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0 Z" />
+    <!-- 高光（白，半透明，营造质感） -->
+    <path android:fillColor="#55FFFFFF" android:pathData="M33,40 a10,14 0 1,1 20,0 a10,14 0 1,1 -20,0 Z" />
+    <!-- 绿叶 -->
+    <path android:fillColor="#3DBE5B" android:pathData="M54,21 C49,12 57,7 65,11 C64,19 59,23 54,21 Z" />
+    <!-- 小果蒂 -->
+    <path android:fillColor="#8AA15A" android:pathData="M52,22 h5 v4 h-5 z" />
 </vector>
