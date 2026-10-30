@@ -8,52 +8,65 @@
     <path android:fillColor="#FF7A00"
         android:pathData="M24,0 h60 a24,24 0 0 1 24,24 v60 a24,24 0 0 1 -24,24 h-60 a24,24 0 0 1 -24,-24 v-60 a24,24 0 0 1 24,-24 Z" />
 
-    <!-- 身体（白，橙描边） -->
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M44,58 h20 a10,10 0 0 1 10,10 v6 a10,10 0 0 1 -10,10 h-20 a10,10 0 0 1 -10,-10 v-6 a10,10 0 0 1 10,-10 Z" />
+    <!-- 身体（白，橙描边；置于头后） -->
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="2"
+        android:pathData="M42,57 Q42,82 54,82 Q66,82 66,57 Z" />
 
-    <!-- 小判金币（橙金，爪下） -->
+    <!-- 小判金币（橙，爪下/身前） -->
     <path android:fillColor="#FFB733" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M29,73 a11,7.5 0 1,1 22,0 a11,7.5 0 1,1 -22,0 Z" />
-    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55"
-        android:pathData="M33,71 a7,4 0 1,1 14,0 a7,4 0 1,1 -14,0 Z" />
+        android:pathData="M45,75 a9,5.5 0 1,1 18,0 a9,5.5 0 1,1 -18,0 Z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.5"
+        android:pathData="M48,73 a5,3 0 1,1 12,0 a5,3 0 1,1 -12,0 Z" />
 
     <!-- 耳朵（白，橙描边；内耳橙） -->
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M34,24 L48,24 L39,6 Z" />
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M60,24 L74,24 L69,6 Z" />
-    <path android:fillColor="#FF7A00" android:pathData="M37,21 L44,21 L40.5,12 Z" />
-    <path android:fillColor="#FF7A00" android:pathData="M64,21 L71,21 L67.5,12 Z" />
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="2"
+        android:pathData="M42,33 L51,33 L46,24 Z" />
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="2"
+        android:pathData="M57,33 L66,33 L62,24 Z" />
+    <path android:fillColor="#FF7A00" android:pathData="M44,31 L49,31 L46,27 Z" />
+    <path android:fillColor="#FF7A00" android:pathData="M59,31 L64,31 L62,27 Z" />
 
     <!-- 头（白，橙描边） -->
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M32,42 a22,22 0 1,1 44,0 a22,22 0 1,1 -44,0 Z" />
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="2"
+        android:pathData="M38,45 a16,16 0 1,1 32,0 a16,16 0 1,1 -32,0 Z" />
 
-    <!-- 抬起的前爪（白，橙描边） -->
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
-        android:pathData="M68,57 a8,8 0 1,1 16,0 a8,8 0 1,1 -16,0 Z" />
-
-    <!-- 眼睛 -->
-    <path android:fillColor="#2B2B2B" android:pathData="M43,42 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0 Z" />
-    <path android:fillColor="#2B2B2B" android:pathData="M59,42 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0 Z" />
-
-    <!-- 鼻子 -->
-    <path android:fillColor="#E85F00" android:pathData="M50,47 L58,47 L54,52 Z" />
-
-    <!-- 胡须 -->
-    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.55"
-        android:pathData="M44,49 L31,46" />
-    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.55"
-        android:pathData="M44,52 L31,54" />
-    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.55"
-        android:pathData="M64,49 L77,46" />
-    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.55"
-        android:pathData="M64,52 L77,54" />
+    <!-- 抬起的前爪（招财猫手势，白，橙描边） -->
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="2"
+        android:pathData="M63,44 a5,5 0 1,1 10,0 a5,5 0 1,1 -10,0 Z" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M63,48 Q62,53 60,57" />
 
     <!-- 项圈 + 铃铛 -->
-    <path android:fillColor="#FF7A00"
-        android:pathData="M40,55 h28 a3,3 0 0 1 3,3 v1 a3,3 0 0 1 -3,3 h-28 a3,3 0 0 1 -3,-3 v-1 a3,3 0 0 1 3,-3 Z" />
-    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1"
-        android:pathData="M51,63 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0 Z" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M44,57 Q54,62 64,57" />
+    <path android:fillColor="#FFFFFF" android:strokeColor="#E85F00" android:strokeWidth="1.5"
+        android:pathData="M51,60 a3,3 0 1,1 6,0 a3,3 0 1,1 -6,0 Z" />
+    <path android:fillColor="#E85F00" android:pathData="M53,60 a1,1 0 1,1 2,0 a1,1 0 1,1 -2,0 Z" />
+
+    <!-- 眼睛 -->
+    <path android:fillColor="#2B2B2B" android:pathData="M46,44 a2.3,2.3 0 1,1 4.6,0 a2.3,2.3 0 1,1 -4.6,0 Z" />
+    <path android:fillColor="#2B2B2B" android:pathData="M57.4,44 a2.3,2.3 0 1,1 4.6,0 a2.3,2.3 0 1,1 -4.6,0 Z" />
+
+    <!-- 鼻子 -->
+    <path android:fillColor="#E85F00" android:pathData="M51,49 L57,49 L54,52 Z" />
+
+    <!-- 嘴 -->
+    <path android:strokeColor="#E85F00" android:strokeWidth="1.5" android:strokeLineCap="round"
+        android:pathData="M54,52 q-3,3 -6,1" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1.5" android:strokeLineCap="round"
+        android:pathData="M54,52 q3,3 6,1" />
+
+    <!-- 胡须 -->
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M49,50 L35,48" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M49,52 L34,52" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M49,54 L35,56" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M59,50 L73,48" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M59,52 L74,52" />
+    <path android:strokeColor="#E85F00" android:strokeWidth="1" android:strokeAlpha="0.5"
+        android:pathData="M59,54 L73,56" />
 </vector>
