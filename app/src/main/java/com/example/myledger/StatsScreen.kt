@@ -45,7 +45,6 @@ import java.util.Locale
 fun StatsScreen() {
     val cal = java.util.Calendar.getInstance()
     val ymNow = Util.ym(cal)
-    val yearNow = cal.get(java.util.Calendar.YEAR)
     var startD by remember { mutableStateOf(ymNow + "-01") }
     var endD by remember { mutableStateOf(Util.today()) }
     var statType by remember { mutableStateOf("expense") }
@@ -78,12 +77,7 @@ fun StatsScreen() {
             }, Modifier.weight(1f)) { Text("止 $endD", fontSize = 12.sp) }
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PresetChip("本月", Modifier.weight(1f)) { startD = ymNow + "-01"; endD = Util.today() }
-            PresetChip("近3月", Modifier.weight(1f)) { startD = shiftMonth(ymNow, -2) + "-01"; endD = Util.today() }
-            PresetChip("今年", Modifier.weight(1f)) { startD = "$yearNow-01-01"; endD = Util.today() }
-            PresetChip("全部", Modifier.weight(1f)) { startD = (LedgerState.transactions.minOfOrNull { it.date } ?: "2000-01-01"); endD = Util.today() }
-        }
+        Text("提示：选择起止日期即可自定义分析时间段。", fontSize = 12.sp, color = TextMuted)
 
         Spacer(Modifier.height(16.dp))
         // 汇总（重设计，宽松不拥挤）
@@ -166,14 +160,6 @@ fun StatsScreen() {
         Spacer(Modifier.height(22.dp))
         // 预算分析（整体 + 分类）
         BudgetAnalysisSection(list, monthsCount)
-    }
-}
-
-@Composable
-fun PresetChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) {
-        Text(label, fontSize = 12.sp, color = Brand)
     }
 }
 
@@ -288,7 +274,8 @@ fun BudgetAnalysisSection(list: List<Tx>, monthsCount: Int) {
     Text("预算分析", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
     Spacer(Modifier.height(8.dp))
     val bud = LedgerState.budget
-    val catBud = LedgerState.categoryBudgets.toList().sortedByDescending { it.second }
+    val existingPaths = LedgerState.categories.map { LedgerState.catPath(it.id) }.toSet()
+    val catBud = LedgerState.categoryBudgets.filterKeys { it in existingPaths }.toList().sortedByDescending { it.second }
     if (bud <= 0 && catBud.isEmpty()) {
         Text("尚未设置预算，去“我的 → 预算管理”设置每月预算或分类预算吧。", color = TextMuted)
     } else {

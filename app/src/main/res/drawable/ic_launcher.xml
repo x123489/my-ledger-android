@@ -1,14 +1,5 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- 橙子主体（橙圆，居中） -->
-    <path android:fillColor="#FF7A00" android:pathData="M20,56 a34,34 0 1,1 68,0 a34,34 0 1,1 -68,0 Z" />
-    <!-- 高光（白，半透明，营造质感） -->
-    <path android:fillColor="#55FFFFFF" android:pathData="M33,40 a10,14 0 1,1 20,0 a10,14 0 1,1 -20,0 Z" />
-    <!-- 绿叶 -->
-    <path android:fillColor="#3DBE5B" android:pathData="M54,21 C49,12 57,7 65,11 C64,19 59,23 54,21 Z" />
-    <!-- 小果蒂 -->
-    <path android:fillColor="#8AA15A" android:pathData="M52,22 h5 v4 h-5 z" />
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@drawable/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

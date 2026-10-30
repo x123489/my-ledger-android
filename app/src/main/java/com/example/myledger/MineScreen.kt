@@ -273,11 +273,11 @@ fun CatManageNode(type: String, cat: Category, depth: Int, onAddChild: (String) 
 // ---------- 预算管理（整体 + 按分类） ----------
 @Composable
 fun BudgetManageScreen(onBack: () -> Unit) {
-    val ctx = LocalContext.current
+        val ctx = LocalContext.current
     var budgetText by remember { mutableStateOf(if (LedgerState.budget > 0) Util.moneyNoSymbol(LedgerState.budget) else "") }
-    val catPaths = remember { LedgerState.categories.map { LedgerState.catPath(it.id) }.distinct().sorted() }
+    val allPaths = remember { LedgerState.categories.map { LedgerState.catPath(it.id) }.distinct() }
     var catInputs by remember {
-        mutableStateOf(catPaths.associateWith { (LedgerState.categoryBudgets[it]?.let { v -> Util.moneyNoSymbol(v) } ?: "") })
+        mutableStateOf(allPaths.associateWith { (LedgerState.categoryBudgets[it]?.let { v -> Util.moneyNoSymbol(v) } ?: "") })
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -316,27 +316,22 @@ fun BudgetManageScreen(onBack: () -> Unit) {
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("分类预算（每月）", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
+        Text("分类预算（每月，按“分类管理”设定）", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextMain)
         Spacer(Modifier.height(8.dp))
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = CardWhite)) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (catPaths.isEmpty()) {
+                if (LedgerState.categories.isEmpty()) {
                     Text("暂无分类，去“分类管理”添加后再设置分类预算。", color = TextMuted, fontSize = 13.sp)
                 } else {
-                    catPaths.forEach { cp ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(cp, Modifier.weight(1f), fontSize = 13.sp, color = TextMain)
-                            Spacer(Modifier.width(8.dp))
-                            OutlinedTextField(
-                                value = catInputs[cp] ?: "", onValueChange = { catInputs = catInputs + (cp to it) },
-                                Modifier.width(110.dp), placeholder = { Text("不限") }, prefix = { Text("¥", color = TextMuted) },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                colors = androidx.compose.material3.TextFieldDefaults.colors(
-                                    focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
-                                    focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            )
+                    listOf("expense" to "支出分类", "income" to "收入分类", "invest" to "投资分类").forEach { (type, label) ->
+                        val tops = LedgerState.topCats(type)
+                        if (tops.isNotEmpty()) {
+                            Text(label, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Brand)
+                            Spacer(Modifier.height(4.dp))
+                            tops.forEach { top ->
+                                CatBudgetNode(type, top, 1, catInputs, { cp, v -> catInputs = catInputs + (cp to v) })
+                            }
+                            Spacer(Modifier.height(6.dp))
                         }
                     }
                 }
@@ -352,6 +347,33 @@ fun BudgetManageScreen(onBack: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = Brand),
             shape = RoundedCornerShape(12.dp)
         ) { Text("保存分类预算", fontSize = 16.sp, color = Color.White) }
+    }
+}
+
+/** 分类预算节点：按分类管理结构递归展示（缩进体现多级），每个节点对应一条分类预算 */
+@Composable
+fun CatBudgetNode(type: String, cat: Category, depth: Int, catInputs: Map<String, String>, onInput: (String, String) -> Unit) {
+    val cp = LedgerState.catPath(cat.id)
+    Row(
+        Modifier.fillMaxWidth().padding(start = ((depth - 1) * 16).dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(cat.name, Modifier.weight(1f), fontSize = 13.sp, color = if (depth == 1) TextMain else TextMuted)
+        Spacer(Modifier.width(8.dp))
+        OutlinedTextField(
+            value = catInputs[cp] ?: "", onValueChange = { onInput(cp, it) },
+            Modifier.width(110.dp), placeholder = { Text("不限") }, prefix = { Text("¥", color = TextMuted) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                focusedContainerColor = CardWhite, unfocusedContainerColor = CardWhite,
+                focusedIndicatorColor = Brand, unfocusedIndicatorColor = Color(0xFFE5E7EB)
+            ),
+            shape = RoundedCornerShape(10.dp)
+        )
+    }
+    LedgerState.childrenOf(cat.id).forEach { child ->
+        CatBudgetNode(type, child, depth + 1, catInputs, onInput)
     }
 }
 
