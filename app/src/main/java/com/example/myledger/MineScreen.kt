@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -253,16 +254,16 @@ fun CategoryManageScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun CatManageNode(type: String, cat: Category, depth: Int, onAddChild: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+fun CatManageNode(type: String, cat: Category, depth: Int, onAddChild: (String) -> Unit, onRename: (Category) -> Unit, onDelete: (Category) -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = ((depth - 1) * 16).dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text((if (depth > 1) "· ".repeat(depth - 1) else "") + cat.name, Modifier.weight(1f), fontSize = 13.sp, color = if (depth == 1) TextMain else TextMuted)
-        if (depth < 4) TextButton(onClick = onAddChild) { Text("加子分类", color = Brand, fontSize = 12.sp) }
-        TextButton(onClick = onRename) { Text("改名", color = TextMuted, fontSize = 12.sp) }
-        TextButton(onClick = onDelete) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
+        if (depth < 4) TextButton(onClick = { onAddChild(cat.id) }) { Text("加子分类", color = Brand, fontSize = 12.sp) }
+        TextButton(onClick = { onRename(cat) }) { Text("改名", color = TextMuted, fontSize = 12.sp) }
+        TextButton(onClick = { onDelete(cat) }) { Text("删除", color = ExpenseRed, fontSize = 12.sp) }
     }
     LedgerState.childrenOf(cat.id).forEach { child ->
         CatManageNode(type, child, depth + 1, onAddChild, onRename, onDelete)

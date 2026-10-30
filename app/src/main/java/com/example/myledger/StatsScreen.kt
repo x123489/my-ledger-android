@@ -79,10 +79,10 @@ fun StatsScreen() {
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PresetChip("本月") { startD = ymNow + "-01"; endD = Util.today() }
-            PresetChip("近3月") { startD = shiftMonth(ymNow, -2) + "-01"; endD = Util.today() }
-            PresetChip("今年") { startD = "$yearNow-01-01"; endD = Util.today() }
-            PresetChip("全部") { startD = (LedgerState.transactions.minOfOrNull { it.date } ?: "2000-01-01"); endD = Util.today() }
+            PresetChip("本月", Modifier.weight(1f)) { startD = ymNow + "-01"; endD = Util.today() }
+            PresetChip("近3月", Modifier.weight(1f)) { startD = shiftMonth(ymNow, -2) + "-01"; endD = Util.today() }
+            PresetChip("今年", Modifier.weight(1f)) { startD = "$yearNow-01-01"; endD = Util.today() }
+            PresetChip("全部", Modifier.weight(1f)) { startD = (LedgerState.transactions.minOfOrNull { it.date } ?: "2000-01-01"); endD = Util.today() }
         }
 
         Spacer(Modifier.height(16.dp))
@@ -158,8 +158,8 @@ fun StatsScreen() {
                 val maxT = expenses.maxByOrNull { it.amount }
                 if (maxT != null) InsightLine("💸 最大单笔支出：${maxT.cat} ${Util.money(Math.abs(maxT.amount))}（${maxT.date}）")
                 val byCat = list.filter { it.type == "expense" }.groupBy { it.cat }.mapValues { it.value.sumOf { t -> t.amount } }
-                val top = byCat.maxByOrNull { it.second }
-                if (top != null) InsightLine("🏆 支出最多的分类：${top.first}，共 ${Util.money(top.second)}，占支出 ${if (totalEx > 0) (top.second / totalEx * 100).toFixed(1) else "0"}%")
+                val top = byCat.maxByOrNull { it.value }
+                if (top != null) InsightLine("🏆 支出最多的分类：${top.key}，共 ${Util.money(top.value)}，占支出 ${if (totalEx > 0) (top.value / totalEx * 100).toFixed(1) else "0"}%")
             }
         }
 
@@ -170,8 +170,8 @@ fun StatsScreen() {
 }
 
 @Composable
-fun PresetChip(label: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, Modifier.weight(1f), shape = RoundedCornerShape(10.dp),
+fun PresetChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    OutlinedButton(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = Brand)) {
         Text(label, fontSize = 12.sp, color = Brand)
     }
